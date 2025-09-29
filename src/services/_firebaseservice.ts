@@ -1,7 +1,14 @@
 import admin from 'firebase-admin';
 import { config as dotenvConfig } from 'dotenv';
-// import { Resend } from 'resend';
 dotenvConfig();
+
+// Import Resend dynamically to avoid build issues
+let Resend: any;
+try {
+  Resend = require('resend').Resend;
+} catch (error) {
+  console.warn('Resend package not found. Email functionality will be disabled.');
+}
 
 const firebaseAdmin = admin.initializeApp({
   credential: admin.credential.cert({
@@ -125,48 +132,43 @@ async function createUser(userData: CreateUserData): Promise<{ uid: string; emai
   }
 }
 
-// Function to send welcome email with login credentials using Resend
-async function sendWelcomeEmail(email: string, name: string, domainType: 'admin' | 'agent' = 'admin'): Promise<void> {
+// Function to send welcome email with reset password link using Resend
+async function sendWelcomeEmail(email: string, name: string): Promise<void> {
   try {
-    // const resend = new Resend(process.env.RESEND_API_KEY);
-    console.log(`Welcome email would be sent to: ${email} for ${name}`);
-    return;
-
-    /* Commented out email functionality
-    // Create custom reset URL with only email based on domain type
-    let domain: string;
-    if (domainType === 'agent') {
-      domain = process.env.AGENT_DOMAIN || 'http://localhost:3000';
-    } else {
-      domain = process.env.ADMIN_DOMAIN || 'http://localhost:3000';
+    if (!Resend) {
+      console.warn('Resend not available. Skipping email send.');
+      return;
     }
-    const resetUrl = `${domain}/reset-password?email=${encodeURIComponent(email)}`;
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    // Generate password reset link from Firebase
+    const resetLink = await firebaseAdmin.auth().generatePasswordResetLink(email);
 
     const { data, error } = await resend.emails.send({
-      from: 'EPS Admin <admin@excelplannings.com>', // You can change this to your domain
+      from: 'onboarding@resend.dev', // Use domain free of Resend
       to: [email],
-      subject: 'Welcome to EPS System - Login Credentials',
+      subject: 'Chào mừng đến với hệ thống Quản lý bến xe - Đặt lại mật khẩu',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #2563eb; text-align: center; margin-bottom: 20px;">EPS System</h1>
+          <h1 style="color: #2563eb; text-align: center;">🚌 Quản lý bến xe</h1>
           
-          <h2 style="color: #333;">Hello ${name}!</h2>
-          <p style="color: #666; margin-bottom: 20px;">
-            Your account has been created. Email: <strong>${email}</strong>
-          </p>
+          <h2>Xin chào ${name}!</h2>
+          <p>Tài khoản của bạn đã được tạo thành công.</p>
+          <p><strong>Email:</strong> ${email}</p>
           
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-              Login & Set Password
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${resetLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Đặt lại mật khẩu
             </a>
           </div>
           
-          <p style="color: #666; font-size: 12px; text-align: center;">
-            Link: <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px;">${resetUrl}</code>
+          <p style="color: #666; font-size: 14px;">
+            <strong>Lưu ý:</strong> Link sẽ hết hạn sau 1 giờ.
           </p>
           
-          <p style="color: #666; font-size: 12px; text-align: center; margin-top: 20px;">
-            Best regards,<br><strong>EPS Team</strong>
+          <p style="text-align: center; margin-top: 20px;">
+            Trân trọng,<br><strong>Đội ngũ Quản lý bến xe</strong>
           </p>
         </div>
       `
@@ -178,8 +180,7 @@ async function sendWelcomeEmail(email: string, name: string, domainType: 'admin'
     }
 
     console.log(`Welcome email sent successfully to: ${email}, ID: ${data?.id}`);
-    console.log(`Reset URL: ${resetUrl}`);
-    */
+    console.log(`Reset link generated for: ${email}`);
   } catch (error) {
     console.error('Error sending welcome email:', error);
     throw error;
@@ -196,6 +197,26 @@ async function sendPasswordResetEmail(email: string): Promise<void> {
   }
 }
 
+// Function to create user and send welcome email with reset password link
+async function createUserAndSendWelcomeEmail(
+  userData: CreateUserData,
+  fullName: string
+): Promise<{ uid: string; email: string; password: string }> {
+  try {
+    // Create user in Firebase
+    const userResult = await createUser(userData);
+
+    // Send welcome email with reset password link
+    await sendWelcomeEmail(userResult.email, fullName);
+
+    console.log(`User created and welcome email sent to: ${userResult.email}`);
+    return userResult;
+  } catch (error) {
+    console.error('Error creating user and sending welcome email:', error);
+    throw error;
+  }
+}
+
 export {
   listAllFirebaseUsers,
   isEmailInFirebase,
@@ -203,6 +224,7 @@ export {
   createUser,
   sendPasswordResetEmail,
   generateRandomPassword,
-  sendWelcomeEmail
+  sendWelcomeEmail,
+  createUserAndSendWelcomeEmail
 };
 export default firebaseAdmin;

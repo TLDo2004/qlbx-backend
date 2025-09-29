@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 // Interface for Employee document
 export interface IEmployee extends Document {
+  uid: string;
   fullName: string;
   phone: string;
   roleId: mongoose.Schema.Types.ObjectId;
@@ -12,6 +13,11 @@ export interface IEmployee extends Document {
 
 // Employee Schema
 const EmployeeSchema = new Schema<IEmployee>({
+  uid: {
+    type: String,
+    required: true,
+    unique: true
+  },
   fullName: {
     type: String,
     required: true
