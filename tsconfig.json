@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+      "outDir": "dist",
+      "incremental": true,
+      "target": "es2017",
+      "module": "commonjs",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "noImplicitReturns": true,
+      "noUnusedLocals": true,
+      "noImplicitAny": false,
+      "sourceMap": true,
+      "strictNullChecks": false,
+      "types": []
+    },
+    "compileOnSave": true,
+    "include": ["src/**/*"]
+  }
+
