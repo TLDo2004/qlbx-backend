@@ -35,6 +35,9 @@ importers:
       node-fetch:
         specifier: ^3.3.2
         version: 3.3.2
+      resend:
+        specifier: ^6.1.1
+        version: 6.1.1
     devDependencies:
       '@types/cors':
         specifier: ^2.8.17
@@ -1195,6 +1198,15 @@ packages:
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
     engines: {node: '>=0.10.0'}
+
+  resend@6.1.1:
+    resolution: {integrity: sha512-qHip8WF4uB2k83vG5EfLWQo27anlHpQagljWLFSIXgbkmNYzoIoAsXctl/RZJl7tf+7uCLM/MEwPzyW5zwCJTA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@react-email/render': ^1.1.0
+    peerDependenciesMeta:
+      '@react-email/render':
+        optional: true
 
   retry-request@7.0.2:
     resolution: {integrity: sha512-dUOvLMJ0/JJYEn8NrpOaGNE7X3vpI5XlZS/u0ANjqtcZVKnIxP7IgCFwrKTxENw29emmwug53awKtaMm4i9g5w==}
@@ -2848,6 +2860,8 @@ snapshots:
       picomatch: 2.3.1
 
   require-directory@2.1.1: {}
+
+  resend@6.1.1: {}
 
   retry-request@7.0.2:
     dependencies:

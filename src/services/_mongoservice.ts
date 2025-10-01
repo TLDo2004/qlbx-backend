@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 // MongoDB Configuration
 const MONGODB_CONFIG = {
-  url: process.env.MONGODB_URL || "mongodb://localhost:27017/qlbx_database",
+  url: process.env.MONGODB_URL || "mongodb+srv://quan-ly-ben-xe:kltn2025@qlbx2025.ycdgy2j.mongodb.net/quan-ly-ben-xe?retryWrites=true&w=majority&appName=Cluster0",
   options: {
     maxPoolSize: 10, // Maintain up to 10 socket connections
     serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
@@ -69,11 +69,13 @@ class MongoService {
 
   // Get connection status
   public isConnected(): boolean {
+    const mongoose = require('mongoose');
     return isConnected && mongoose.connection.readyState === 1;
   }
 
   // Get connection info
   public getConnectionInfo() {
+    const mongoose = require('mongoose');
     return {
       isConnected: this.isConnected(),
       readyState: mongoose.connection.readyState,

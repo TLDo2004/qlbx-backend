@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import mongoService from './services/_mongoservice';
-import router from './routes';
+import routes from './routes';
 
 export const app = express();
 
@@ -53,7 +53,7 @@ api.get('/hello', (req, res) => {
 });
 
 // Mount all routes
-app.use('/api/v1', router);
+app.use('/api/v1', routes);
 
 // Version the api
 app.use('/api/v1', api);

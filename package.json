@@ -21,7 +21,8 @@
     "mongoose": "^8.18.2",
     "mysql": "^2.18.1",
     "mysql2": "^3.14.3",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "resend": "^6.1.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

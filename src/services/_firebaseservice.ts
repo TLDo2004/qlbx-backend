@@ -137,6 +137,12 @@ async function sendWelcomeEmail(email: string, name: string): Promise<void> {
   try {
     if (!Resend) {
       console.warn('Resend not available. Skipping email send.');
+      // Don't throw error, just skip email sending
+      return;
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('RESEND_API_KEY not configured. Skipping email send.');
       return;
     }
 

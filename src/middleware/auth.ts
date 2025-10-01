@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import firebaseAdmin from '../services/_firebaseservice';
 import { unauthorized } from '../utils/index';
-import { Employee } from '../models/Employee';
-import { Permission } from '../models/Permission';
+import { Employee, Permission } from '../models';
 
 interface AuthenticatedRequest extends Request {
     userRecord?: any;
@@ -120,7 +119,7 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
                             const allPermissions = await Permission.find({});
                             allPermissions.forEach(permission => {
                                 permissions.push({
-                                    permission_id: permission.permissionId.toString(),
+                                    permission_id: permission._id.toString(),
                                     permission_name: permission.permissionName
                                 });
                             });
@@ -140,7 +139,7 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
                                 });
                                 gatePermissions.forEach(permission => {
                                     permissions.push({
-                                        permission_id: permission.permissionId.toString(),
+                                        permission_id: permission._id.toString(),
                                         permission_name: permission.permissionName
                                     });
                                 });
@@ -161,7 +160,7 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
                                 });
                                 managementPermissions.forEach(permission => {
                                     permissions.push({
-                                        permission_id: permission.permissionId.toString(),
+                                        permission_id: permission._id.toString(),
                                         permission_name: permission.permissionName
                                     });
                                 });
