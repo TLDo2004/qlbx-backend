@@ -2,12 +2,12 @@ import admin from 'firebase-admin';
 import { config as dotenvConfig } from 'dotenv';
 dotenvConfig();
 
-// Import Resend dynamically to avoid build issues
-let Resend: any;
+// Import nodemailer for Gmail SMTP
+let nodemailer: any;
 try {
-  Resend = require('resend').Resend;
+  nodemailer = require('nodemailer');
 } catch (error) {
-  console.warn('Resend package not found. Email functionality will be disabled.');
+  console.warn('Nodemailer package not found. Email functionality will be disabled.');
 }
 
 const firebaseAdmin = admin.initializeApp({
@@ -132,36 +132,42 @@ async function createUser(userData: CreateUserData): Promise<{ uid: string; emai
   }
 }
 
-// Function to send welcome email with reset password link using Resend
+// Function to send welcome email with reset password link using Gmail SMTP
 async function sendWelcomeEmail(email: string, name: string): Promise<void> {
   try {
-    if (!Resend) {
-      console.warn('Resend not available. Skipping email send.');
-      // Don't throw error, just skip email sending
+    if (!nodemailer) {
+      console.warn('Nodemailer not available. Skipping email send.');
       return;
     }
 
-    if (!process.env.RESEND_API_KEY) {
-      console.warn('RESEND_API_KEY not configured. Skipping email send.');
+    if (!process.env.GMAIL_SMTP_API_KEY) {
+      console.warn('GMAIL_SMTP_API_KEY not configured. Skipping email send.');
       return;
     }
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    // Create Gmail SMTP transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'bus.station.uit@gmail.com',
+        pass: process.env.GMAIL_SMTP_API_KEY
+      }
+    });
 
     // Generate password reset link from Firebase
     const resetLink = await firebaseAdmin.auth().generatePasswordResetLink(email);
 
-    const { data, error } = await resend.emails.send({
-      from: 'onboarding@resend.dev', // Use domain free of Resend
-      to: [email],
+    await transporter.sendMail({
+      from: 'bus.station.uit@gmail.com',
+      to: email,
       subject: 'Chào mừng đến với hệ thống Quản lý bến xe - Đặt lại mật khẩu',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; text-align: center;">
           <h1 style="color: #2563eb; text-align: center;">🚌 Quản lý bến xe</h1>
           
-          <h2>Xin chào ${name}!</h2>
-          <p>Tài khoản của bạn đã được tạo thành công.</p>
-          <p><strong>Email:</strong> ${email}</p>
+          <h2 style="text-align: center;">Xin chào ${name}!</h2>
+          <p style="text-align: center;">Tài khoản của bạn đã được tạo thành công.</p>
+          <p style="text-align: center;"><strong>Email:</strong> ${email}</p>
           
           <div style="text-align: center; margin: 20px 0;">
             <a href="${resetLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
@@ -169,7 +175,7 @@ async function sendWelcomeEmail(email: string, name: string): Promise<void> {
             </a>
           </div>
           
-          <p style="color: #666; font-size: 14px;">
+          <p style="color: #666; font-size: 14px; text-align: center;">
             <strong>Lưu ý:</strong> Link sẽ hết hạn sau 1 giờ.
           </p>
           
@@ -177,16 +183,9 @@ async function sendWelcomeEmail(email: string, name: string): Promise<void> {
             Trân trọng,<br><strong>Đội ngũ Quản lý bến xe</strong>
           </p>
         </div>
-      `
+      `,
+      text: `Xin chào ${name}!\n\nTài khoản của bạn đã được tạo thành công.\nEmail: ${email}\n\nĐặt lại mật khẩu: ${resetLink}\n\nLink sẽ hết hạn sau 1 giờ.\n\nTrân trọng,\nĐội ngũ Quản lý bến xe`
     });
-
-    if (error) {
-      console.error('Resend API error:', error);
-      throw new Error(`Failed to send email: ${error.message}`);
-    }
-
-    console.log(`Welcome email sent successfully to: ${email}, ID: ${data?.id}`);
-    console.log(`Reset link generated for: ${email}`);
   } catch (error) {
     console.error('Error sending welcome email:', error);
     throw error;
@@ -207,18 +206,23 @@ async function sendPasswordResetEmail(email: string): Promise<void> {
 async function createUserAndSendWelcomeEmail(
   userData: CreateUserData,
   fullName: string
-): Promise<{ uid: string; email: string; password: string }> {
+): Promise<{ uid: string; email: string; password: string; resetLink?: string }> {
   try {
     // Create user in Firebase
     const userResult = await createUser(userData);
 
+    // Generate reset link for response
+    const resetLink = await firebaseAdmin.auth().generatePasswordResetLink(userResult.email);
+
     // Send welcome email with reset password link
     await sendWelcomeEmail(userResult.email, fullName);
 
-    console.log(`User created and welcome email sent to: ${userResult.email}`);
-    return userResult;
+    return {
+      ...userResult,
+      resetLink: resetLink
+    };
   } catch (error) {
-    console.error('Error creating user and sending welcome email:', error);
+    console.error('Error creating user:', error);
     throw error;
   }
 }
