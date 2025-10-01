@@ -1,7 +1,14 @@
 import admin from 'firebase-admin';
 import { config as dotenvConfig } from 'dotenv';
-// import { Resend } from 'resend';
 dotenvConfig();
+
+// Import nodemailer for Gmail SMTP
+let nodemailer: any;
+try {
+  nodemailer = require('nodemailer');
+} catch (error) {
+  console.warn('Nodemailer package not found. Email functionality will be disabled.');
+}
 
 const firebaseAdmin = admin.initializeApp({
   credential: admin.credential.cert({
@@ -125,61 +132,60 @@ async function createUser(userData: CreateUserData): Promise<{ uid: string; emai
   }
 }
 
-// Function to send welcome email with login credentials using Resend
-async function sendWelcomeEmail(email: string, name: string, domainType: 'admin' | 'agent' = 'admin'): Promise<void> {
+// Function to send welcome email with reset password link using Gmail SMTP
+async function sendWelcomeEmail(email: string, name: string): Promise<void> {
   try {
-    // const resend = new Resend(process.env.RESEND_API_KEY);
-    console.log(`Welcome email would be sent to: ${email} for ${name}`);
-    return;
-
-    /* Commented out email functionality
-    // Create custom reset URL with only email based on domain type
-    let domain: string;
-    if (domainType === 'agent') {
-      domain = process.env.AGENT_DOMAIN || 'http://localhost:3000';
-    } else {
-      domain = process.env.ADMIN_DOMAIN || 'http://localhost:3000';
+    if (!nodemailer) {
+      console.warn('Nodemailer not available. Skipping email send.');
+      return;
     }
-    const resetUrl = `${domain}/reset-password?email=${encodeURIComponent(email)}`;
 
-    const { data, error } = await resend.emails.send({
-      from: 'EPS Admin <admin@excelplannings.com>', // You can change this to your domain
-      to: [email],
-      subject: 'Welcome to EPS System - Login Credentials',
+    if (!process.env.GMAIL_SMTP_API_KEY) {
+      console.warn('GMAIL_SMTP_API_KEY not configured. Skipping email send.');
+      return;
+    }
+
+    // Create Gmail SMTP transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'bus.station.uit@gmail.com',
+        pass: process.env.GMAIL_SMTP_API_KEY
+      }
+    });
+
+    // Generate password reset link from Firebase
+    const resetLink = await firebaseAdmin.auth().generatePasswordResetLink(email);
+
+    await transporter.sendMail({
+      from: 'bus.station.uit@gmail.com',
+      to: email,
+      subject: 'Chào mừng đến với hệ thống Quản lý bến xe - Đặt lại mật khẩu',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #2563eb; text-align: center; margin-bottom: 20px;">EPS System</h1>
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; text-align: center;">
+          <h1 style="color: #2563eb; text-align: center;">🚌 Quản lý bến xe</h1>
           
-          <h2 style="color: #333;">Hello ${name}!</h2>
-          <p style="color: #666; margin-bottom: 20px;">
-            Your account has been created. Email: <strong>${email}</strong>
-          </p>
+          <h2 style="text-align: center;">Xin chào ${name}!</h2>
+          <p style="text-align: center;">Tài khoản của bạn đã được tạo thành công.</p>
+          <p style="text-align: center;"><strong>Email:</strong> ${email}</p>
           
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-              Login & Set Password
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${resetLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Đặt lại mật khẩu
             </a>
           </div>
           
-          <p style="color: #666; font-size: 12px; text-align: center;">
-            Link: <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px;">${resetUrl}</code>
+          <p style="color: #666; font-size: 14px; text-align: center;">
+            <strong>Lưu ý:</strong> Link sẽ hết hạn sau 1 giờ.
           </p>
           
-          <p style="color: #666; font-size: 12px; text-align: center; margin-top: 20px;">
-            Best regards,<br><strong>EPS Team</strong>
+          <p style="text-align: center; margin-top: 20px;">
+            Trân trọng,<br><strong>Đội ngũ Quản lý bến xe</strong>
           </p>
         </div>
-      `
+      `,
+      text: `Xin chào ${name}!\n\nTài khoản của bạn đã được tạo thành công.\nEmail: ${email}\n\nĐặt lại mật khẩu: ${resetLink}\n\nLink sẽ hết hạn sau 1 giờ.\n\nTrân trọng,\nĐội ngũ Quản lý bến xe`
     });
-
-    if (error) {
-      console.error('Resend API error:', error);
-      throw new Error(`Failed to send email: ${error.message}`);
-    }
-
-    console.log(`Welcome email sent successfully to: ${email}, ID: ${data?.id}`);
-    console.log(`Reset URL: ${resetUrl}`);
-    */
   } catch (error) {
     console.error('Error sending welcome email:', error);
     throw error;
@@ -196,6 +202,31 @@ async function sendPasswordResetEmail(email: string): Promise<void> {
   }
 }
 
+// Function to create user and send welcome email with reset password link
+async function createUserAndSendWelcomeEmail(
+  userData: CreateUserData,
+  fullName: string
+): Promise<{ uid: string; email: string; password: string; resetLink?: string }> {
+  try {
+    // Create user in Firebase
+    const userResult = await createUser(userData);
+
+    // Generate reset link for response
+    const resetLink = await firebaseAdmin.auth().generatePasswordResetLink(userResult.email);
+
+    // Send welcome email with reset password link
+    await sendWelcomeEmail(userResult.email, fullName);
+
+    return {
+      ...userResult,
+      resetLink: resetLink
+    };
+  } catch (error) {
+    console.error('Error creating user:', error);
+    throw error;
+  }
+}
+
 export {
   listAllFirebaseUsers,
   isEmailInFirebase,
@@ -203,6 +234,7 @@ export {
   createUser,
   sendPasswordResetEmail,
   generateRandomPassword,
-  sendWelcomeEmail
+  sendWelcomeEmail,
+  createUserAndSendWelcomeEmail
 };
 export default firebaseAdmin;
