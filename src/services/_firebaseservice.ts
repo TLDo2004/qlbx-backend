@@ -163,14 +163,14 @@ async function sendWelcomeEmail(email: string, name: string): Promise<void> {
       subject: 'Chào mừng đến với hệ thống Quản lý bến xe - Đặt lại mật khẩu',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; text-align: center;">
-          <h1 style="color: #2563eb; text-align: center;">🚌 Quản lý bến xe</h1>
+          <h1 style="color: #F97A00; text-align: center;">🚌 Quản lý bến xe</h1>
           
           <h2 style="text-align: center;">Xin chào ${name}!</h2>
           <p style="text-align: center;">Tài khoản của bạn đã được tạo thành công.</p>
-          <p style="text-align: center;"><strong>Email:</strong> ${email}</p>
+          <p style="text-align: center;"><strong>Email:</strong> <span style="color: #F97A00;">${email}</span></p>
           
           <div style="text-align: center; margin: 20px 0;">
-            <a href="${resetLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            <a href="${resetLink}" style="background-color: #F97A00; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; transition: background-color 0.2s;">
               Đặt lại mật khẩu
             </a>
           </div>
@@ -180,7 +180,7 @@ async function sendWelcomeEmail(email: string, name: string): Promise<void> {
           </p>
           
           <p style="text-align: center; margin-top: 20px;">
-            Trân trọng,<br><strong>Đội ngũ Quản lý bến xe</strong>
+            Trân trọng,<br><strong style="color: #386641;">Đội ngũ Quản lý bến xe</strong>
           </p>
         </div>
       `,
