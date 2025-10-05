@@ -1,11 +1,12 @@
 import express from 'express';
 import { GateStaff } from '../../models';
 import { createUserAndSendWelcomeEmail } from '../../services/_firebaseservice';
+import { adminAuth } from '../../middleware';
 
 const gateStaffRouter = express.Router();
 
 //POST /employee/gateStaff - create a new gate staff
-gateStaffRouter.post('/', async (req: express.Request, res: express.Response): Promise<void> => {
+gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { fullName, phone, email } = req.body;
 
