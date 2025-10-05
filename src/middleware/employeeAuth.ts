@@ -6,12 +6,12 @@ interface AuthenticatedRequest extends Request {
     userRole?: string[];
 }
 
-const managementStaffAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (req.userRole?.includes('management_staff')) {
+const employeeAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (req.userRole?.includes('Employee')) {
         next();
     } else {
         forbidden(res, 'Insufficient Permission. Please contact Admin.');
     }
 };
 
-export default managementStaffAuth;
+export default employeeAuth;

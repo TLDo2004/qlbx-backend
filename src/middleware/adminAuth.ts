@@ -7,7 +7,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 const adminAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (req.userRole?.includes('admin')) {
+    if (req.userRole?.includes('Admin')) {
         next();
     } else {
         forbidden(res, 'Insufficient Permission. Please contact Admin.');

@@ -1,8 +1,10 @@
 import express from 'express';
 import { Employee, Role } from '../../models';
 import { internalError } from '../../utils';
+import { adminAuth } from '../../middleware/index';
 import mongoose from 'mongoose';
-import { createUserAndSendWelcomeEmail } from '../../services/_firebaseservice';
+import { createUserAndSendWelcomeEmail, getFirebaseUserByUid } from '../../services/_firebaseservice';
+import gateStaffRouter from './gateStaff';
 
 interface IEmployeeRequest extends express.Request {
   body: {
@@ -15,24 +17,28 @@ interface IEmployeeRequest extends express.Request {
 
 const employeeRouter = express.Router();
 
-//GET /employee - Get all employees
-employeeRouter.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
+//GET /employee/list - Get all employees
+employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const employees = await Employee.find({ isActive: true })
       .populate('roleId')
       .sort({ createdAt: -1 });
 
-    // Transform data to include roleName instead of full role object
-    const transformedEmployees = employees.map(emp => ({
-      _id: emp._id,
-      uid: emp.uid,
-      fullName: emp.fullName,
-      phone: emp.phone,
-      roleId: (emp.roleId as any)?._id || null,
-      roleName: (emp.roleId as any)?.roleName || null,
-      isActive: emp.isActive,
-      createdAt: emp.createdAt,
-      updatedAt: emp.updatedAt
+    // Transform data to include roleName and email from Firebase
+    const transformedEmployees = await Promise.all(employees.map(async (emp) => {
+      const firebaseUser = await getFirebaseUserByUid(emp.uid);
+      return {
+        _id: emp._id,
+        uid: emp.uid,
+        fullName: emp.fullName,
+        phone: emp.phone,
+        email: firebaseUser?.email || null,
+        roleId: (emp.roleId as any)?._id || null,
+        roleName: (emp.roleId as any)?.roleName || null,
+        isActive: emp.isActive,
+        createdAt: emp.createdAt,
+        updatedAt: emp.updatedAt
+      };
     }));
 
     res.json({
@@ -45,8 +51,54 @@ employeeRouter.get('/', async (req: express.Request, res: express.Response): Pro
   }
 });
 
+//GET /employee/me - Get current authenticated employee
+employeeRouter.get('/me', async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const uid = (req as any)?.userRecord?.uid;
+
+    if (!uid) {
+      res.status(401).json({
+        success: false,
+        error: 'Unauthorized: missing user context'
+      });
+      return;
+    }
+
+    const employee = await Employee.findOne({ uid, isActive: true }).populate('roleId');
+
+    if (!employee) {
+      res.status(404).json({
+        success: false,
+        error: 'Employee not found'
+      });
+      return;
+    }
+
+    const transformedEmployee = {
+      _id: employee._id,
+      uid: employee.uid,
+      fullName: employee.fullName,
+      phone: employee.phone,
+      email: (req as any)?.userRecord?.email || null,
+      roleId: (employee.roleId as any)?._id || null,
+      roleName: (employee.roleId as any)?.roleName || null,
+      isActive: employee.isActive,
+      createdAt: employee.createdAt,
+      updatedAt: employee.updatedAt
+    };
+
+    res.json({
+      success: true,
+      data: transformedEmployee
+    });
+  } catch (error) {
+    console.error('Error fetching current employee:', error);
+    internalError(res, 'Failed to fetch current employee');
+  }
+});
+
 //GET /employee/:id - Get employee by ID
-employeeRouter.get('/:id', async (req: express.Request, res: express.Response): Promise<void> => {
+employeeRouter.get('/:id', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { id } = req.params;
     const employee = await Employee.findById(id).populate('roleId');
@@ -59,12 +111,16 @@ employeeRouter.get('/:id', async (req: express.Request, res: express.Response): 
       return;
     }
 
-    // Transform data to include roleName instead of full role object
+    // Get email from Firebase
+    const firebaseUser = await getFirebaseUserByUid(employee.uid);
+
+    // Transform data to include roleName and email from Firebase
     const transformedEmployee = {
       _id: employee._id,
       uid: employee.uid,
       fullName: employee.fullName,
       phone: employee.phone,
+      email: firebaseUser?.email || null,
       roleId: (employee.roleId as any)?._id || null,
       roleName: (employee.roleId as any)?.roleName || null,
       isActive: employee.isActive,
@@ -83,7 +139,7 @@ employeeRouter.get('/:id', async (req: express.Request, res: express.Response): 
 });
 
 //POST /employee - Create a new employee with Firebase user
-employeeRouter.post('/', async (req: IEmployeeRequest, res: express.Response): Promise<void> => {
+employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.Response): Promise<void> => {
   try {
     const { fullName, phone, roleId, email } = req.body;
 
@@ -218,5 +274,8 @@ employeeRouter.post('/', async (req: IEmployeeRequest, res: express.Response): P
     });
   }
 });
+
+// Use gate staff 
+employeeRouter.use('/gate-staff', gateStaffRouter);
 
 export default employeeRouter;

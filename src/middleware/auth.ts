@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import firebaseAdmin from '../services/_firebaseservice';
 import { unauthorized } from '../utils/index';
-import { Employee, Permission } from '../models';
+import { Employee, Permission, GateStaff } from '../models';
 
 interface AuthenticatedRequest extends Request {
     userRecord?: any;
@@ -60,32 +60,26 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
         req.userRecord = userRecord;
 
         // Query MongoDB collections
-        let employeeData: any[];
+        let employeeData: any[] = [];
+        let gateStaffData: any[] = [];
         try {
-            // Find employee with management staff role
-            const managerResult = await Employee.find({ uid: uid, isActive: true })
-                .populate({
-                    path: 'roleId',
-                    match: { roleName: 'Management staff' }
-                })
+            // Find all employees
+            const employeeResult = await Employee.find({ uid: uid, isActive: true })
+                .populate('roleId')
                 .exec();
 
-            //Find employee with gate staff role
-            const gateResult = await Employee.find({ uid: uid, isActive: true })
-                .populate({
-                    path: 'roleId',
-                    match: { roleName: 'Gate staff' }
-                })
+            // Find employee has admin role
+            const adminResult = await Employee.find({ uid: uid, isActive: true, roleId: { $exists: true, $ne: null } })
+                .populate('roleId')
+                .where({ 'roleId.roleName': 'Admin' })
                 .exec();
 
-            //Find employee with admin role
-            const adminResult = await Employee.find({ uid: uid, isActive: true })
-                .populate({
-                    path: 'roleId',
-                    match: { roleName: 'Admin' }
-                })
+            //Find gate staff
+            const gateResult = await GateStaff.find({ uid: uid, isActive: true })
                 .exec();
-            employeeData = [...adminResult, ...gateResult, ...managerResult];
+
+            employeeData = [...employeeResult, ...adminResult];
+            gateStaffData = [...gateResult];
         } catch (dbError) {
             throw dbError;
         }
@@ -96,11 +90,14 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
             permission_name: string;
         }[] = [];
 
-        // Check if data is empty
-        if (!employeeData || employeeData.length === 0) {
-            req.userRole = role;
-            next();
-            return;
+        // Check if data gate staff is not empty
+        if (gateStaffData && gateStaffData.length !== 0) {
+            role.push('gate_staff');
+        }
+
+        // Check if data employee is not empty
+        if (employeeData && employeeData.length !== 0) {
+            role.push('Employee');
         }
 
         // Filter out employees with roleId that is not null
@@ -127,33 +124,12 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
                             console.error('Error fetching all permissions for Admin:', error);
                         }
                         break;
-                    case 'Gate staff':
-                        if (!role.includes('Gate staff')) {
-                            role.push('Gate staff');
+                    default:
+                        if (!role.includes(emp.roleId.roleName)) {
+                            role.push(emp.roleId.roleName);
                         }
                         if (emp.roleId.permissionId) {
-                            // Populate permissions for gate staff
-                            try {
-                                const gatePermissions = await Permission.find({
-                                    _id: { $in: emp.roleId.permissionId }
-                                });
-                                gatePermissions.forEach(permission => {
-                                    permissions.push({
-                                        permission_id: permission._id.toString(),
-                                        permission_name: permission.permissionName
-                                    });
-                                });
-                            } catch (error) {
-                                console.error('Error fetching permissions for Gate staff:', error);
-                            }
-                        }
-                        break;
-                    case 'Management staff':
-                        if (!role.includes('Management staff')) {
-                            role.push('Management staff');
-                        }
-                        if (emp.roleId.permissionId) {
-                            // Populate permissions for management staff
+                            // Populate permissions for employee
                             try {
                                 const managementPermissions = await Permission.find({
                                     _id: { $in: emp.roleId.permissionId }
@@ -165,7 +141,7 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
                                     });
                                 });
                             } catch (error) {
-                                console.error('Error fetching permissions for Management staff:', error);
+                                console.error('Error fetching permissions for Employee:', error);
                             }
                         }
                         break;
