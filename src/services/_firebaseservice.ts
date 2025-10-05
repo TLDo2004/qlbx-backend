@@ -76,6 +76,22 @@ async function isUidInFirebase(uid: string): Promise<boolean> {
   }
 }
 
+async function getFirebaseUserByUid(uid: string): Promise<{ uid: string; email: string | undefined } | null> {
+  try {
+    const userRecord = await firebaseAdmin.auth().getUser(uid);
+    if (userRecord) {
+      return {
+        uid: userRecord.uid,
+        email: userRecord.email
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting Firebase user by UID:', error);
+    return null;
+  }
+}
+
 interface CreateUserData {
   email: string;
   password?: string;
@@ -231,6 +247,7 @@ export {
   listAllFirebaseUsers,
   isEmailInFirebase,
   isUidInFirebase,
+  getFirebaseUserByUid,
   createUser,
   sendPasswordResetEmail,
   generateRandomPassword,
