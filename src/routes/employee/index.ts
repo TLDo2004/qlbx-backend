@@ -5,6 +5,7 @@ import { adminAuth } from '../../middleware/index';
 import mongoose from 'mongoose';
 import { createUserAndSendWelcomeEmail, getFirebaseUserByUid } from '../../services/_firebaseservice';
 import gateStaffRouter from './gateStaff';
+import roleRouter from './role';
 
 interface IEmployeeRequest extends express.Request {
   body: {
@@ -17,12 +18,43 @@ interface IEmployeeRequest extends express.Request {
 
 const employeeRouter = express.Router();
 
-//GET /employee/list - Get all employees
+//GET /employee/list - Get all employees with pagination
 employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
+    // Parse pagination parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // Validate pagination parameters
+    if (page < 1) {
+      res.status(400).json({
+        success: false,
+        error: 'Page number must be greater than 0'
+      });
+      return;
+    }
+
+    if (limit < 1 || limit > 100) {
+      res.status(400).json({
+        success: false,
+        error: 'Limit must be between 1 and 100'
+      });
+      return;
+    }
+
+    // Calculate skip value
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination info
+    const totalEmployees = await Employee.countDocuments({ isActive: true });
+    const totalPages = Math.ceil(totalEmployees / limit);
+
+    // Get employees with pagination
     const employees = await Employee.find({ isActive: true })
       .populate('roleId')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     // Transform data to include roleName and email from Firebase
     const transformedEmployees = await Promise.all(employees.map(async (emp) => {
@@ -43,7 +75,15 @@ employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express
 
     res.json({
       success: true,
-      data: transformedEmployees
+      data: transformedEmployees,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalItems: totalEmployees,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
     });
   } catch (error) {
     console.error('Error fetching employees:', error);
@@ -277,5 +317,6 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
 
 // Use gate staff 
 employeeRouter.use('/gate-staff', gateStaffRouter);
+employeeRouter.use('/role', adminAuth, roleRouter);
 
 export default employeeRouter;
