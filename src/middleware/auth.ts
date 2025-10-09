@@ -35,6 +35,7 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
         return next();
     }
 
+    // Check if this is a gate staff API key
     if (token === process.env.GATE_STAFF_API_KEY) {
         req.userRecord = { uid: 'gate_staff_api_key' };
         req.userRole = ['gate_staff'];
