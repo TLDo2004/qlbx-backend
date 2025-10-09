@@ -35,6 +35,12 @@ const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: Ne
         return next();
     }
 
+    if (token === process.env.GATE_STAFF_API_KEY) {
+        req.userRecord = { uid: 'gate_staff_api_key' };
+        req.userRole = ['gate_staff'];
+        return next();
+    }
+
     // Verify Firebase token
     try {
         const decodedToken = await firebaseAdmin.auth().verifyIdToken(token);
