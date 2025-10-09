@@ -1,6 +1,6 @@
 import express from 'express';
 import { Camera } from '../../models';
-import { internalError, created, badRequest } from '../../utils';
+import { internalError, created, badRequest, success } from '../../utils';
 import { gateStaffAuth } from '../../middleware/index';
 import crypto from 'crypto';
 
@@ -85,6 +85,16 @@ cameraRouter.post('/', gateStaffAuth, async (req: ICameraRequest, res: express.R
     }
 
     internalError(res, 'Failed to create camera');
+  }
+});
+
+// GET /camera - Get all cameras
+cameraRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const cameras = await Camera.find();
+    success(res, cameras, 'Cameras fetched successfully');
+  } catch (error: any) {
+    internalError(res, 'Failed to fetch cameras');
   }
 });
 
