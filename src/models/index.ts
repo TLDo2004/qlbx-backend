@@ -3,3 +3,4 @@ export { Employee } from './employeeModel';
 export { Role } from './roleModel';
 export { Permission } from './permissionModel';
 export { GateStaff } from './gateStaffModel';
+export { Camera } from './cameraModel';
