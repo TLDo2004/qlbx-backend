@@ -11,6 +11,9 @@ importers:
       '@types/nodemailer':
         specifier: ^7.0.2
         version: 7.0.2
+      axios:
+        specifier: ^1.12.2
+        version: 1.12.2
       cors:
         specifier: ^2.8.5
         version: 2.8.5
