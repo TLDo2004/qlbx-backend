@@ -2,6 +2,8 @@ import express from 'express';
 import cameraRouter from './camera';
 import { internalError } from '../../utils/index';
 import { GateStaff } from '../../models/gateStaffModel';
+import anprRouter from './anpr';
+import rfidRouter from './rfidReader';
 
 const gateStaffRouter = express.Router();
 
@@ -56,5 +58,11 @@ gateStaffRouter.get('/me', async (req: AuthenticatedRequest, res: express.Respon
 
 // Use camera routes
 gateStaffRouter.use('/camera', cameraRouter);
+
+// Use ANPR routes
+gateStaffRouter.use('/anpr', anprRouter);
+
+// Use RFID reader routes
+gateStaffRouter.use('/rfid', rfidRouter);
 
 export default gateStaffRouter;
