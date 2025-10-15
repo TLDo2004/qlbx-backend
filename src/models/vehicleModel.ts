@@ -9,10 +9,10 @@ export enum VehicleType {
     INTERNAL = 'internal'
 }
 
-// Enum for vehicle status
-export enum VehicleStatus {
-    INSIDE = 'inside',
-    OUTSIDE = 'outside',
+// Enum for vehicle gate status
+export enum VehicleGateStatus {
+    GATE_IN = 'gate_in',
+    GATE_OUT = 'gate_out',
     INACTIVE = 'inactive'
 }
 
@@ -23,7 +23,7 @@ export interface IVehicle extends Document {
     vehicle_type?: VehicleType;
     company?: string;
     rfid_etc?: string;
-    status: VehicleStatus;
+    gate: VehicleGateStatus;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -59,11 +59,11 @@ const VehicleSchema = new Schema<IVehicle>({
         sparse: true,
         trim: true
     },
-    status: {
+    gate: {
         type: String,
         required: true,
-        enum: Object.values(VehicleStatus),
-        default: VehicleStatus.OUTSIDE
+        enum: Object.values(VehicleGateStatus),
+        default: VehicleGateStatus.GATE_OUT
     }
 }, {
     timestamps: true,
@@ -72,7 +72,7 @@ const VehicleSchema = new Schema<IVehicle>({
 });
 
 // Index for better query performance
-VehicleSchema.index({ status: 1 });
+VehicleSchema.index({ gate: 1 });
 VehicleSchema.index({ vehicle_type: 1 });
 
 export const Vehicle = mongoose.model<IVehicle>('vehicle', VehicleSchema, 'vehicle');

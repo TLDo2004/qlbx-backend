@@ -1,5 +1,5 @@
 import express from 'express';
-import { Vehicle, VehicleStatus, VehicleType } from '../models';
+import { Vehicle, VehicleType, VehicleGateStatus } from '../models';
 import { internalError } from '../utils';
 
 interface IVehicleRequest extends express.Request {
@@ -9,7 +9,7 @@ interface IVehicleRequest extends express.Request {
     vehicle_type?: string;
     company?: string;
     rfid_etc?: string;
-    status: VehicleStatus;
+    gate: VehicleGateStatus;
   };
 }
 
@@ -106,7 +106,7 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
         vehicle_type: vehicle.vehicle_type,
         company: vehicle.company,
         rfid_etc: vehicle.rfid_etc,
-        status: vehicle.status,
+        gate: vehicle.gate,
         createdAt: vehicle.createdAt,
         updatedAt: vehicle.updatedAt
       }
@@ -120,22 +120,22 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
 // POST /vehicle - Create a new vehicle
 vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Promise<void> => {
   try {
-    const { license_plate, vehicle_group, vehicle_type, company, rfid_etc, status } = req.body;
+    const { license_plate, vehicle_group, vehicle_type, company, rfid_etc, gate } = req.body;
 
     // Validate required fields
-    if (!license_plate || !status) {
+    if (!license_plate || !gate) {
       res.status(400).json({
         success: false,
-        error: 'Missing required fields: license_plate and status are required'
+        error: 'Missing required fields: license_plate and gate are required'
       });
       return;
     }
 
-    // Validate status enum
-    if (!Object.values(VehicleStatus).includes(status)) {
+    // Validate gate enum
+    if (!Object.values(VehicleGateStatus).includes(gate)) {
       res.status(400).json({
         success: false,
-        error: `Invalid status. Must be one of: ${Object.values(VehicleStatus).join(', ')}`
+        error: `Invalid gate. Must be one of: ${Object.values(VehicleGateStatus).join(', ')}`
       });
       return;
     }
@@ -180,7 +180,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     // Create vehicle data object with only provided fields
     const vehicleData: any = {
       license_plate: license_plate.trim().toUpperCase(),
-      status
+      gate
     };
 
     // Add optional fields if provided
@@ -202,7 +202,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
         vehicle_type: vehicle.vehicle_type,
         company: vehicle.company,
         rfid_etc: vehicle.rfid_etc,
-        status: vehicle.status,
+        gate: vehicle.gate,
         createdAt: vehicle.createdAt,
         updatedAt: vehicle.updatedAt
       }
@@ -239,7 +239,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
 vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { license_plate } = req.params;
-    const { vehicle_group, vehicle_type, company, rfid_etc, status } = req.body;
+    const { vehicle_group, vehicle_type, company, rfid_etc, gate } = req.body;
 
     // Validate license_plate parameter
     if (!license_plate || license_plate.trim() === '') {
@@ -263,11 +263,11 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
       return;
     }
 
-    // Validate status if provided
-    if (status && !Object.values(VehicleStatus).includes(status)) {
+    // Validate gate if provided
+    if (gate && !Object.values(VehicleGateStatus).includes(gate)) {
       res.status(400).json({
         success: false,
-        error: `Invalid status. Must be one of: ${Object.values(VehicleStatus).join(', ')}`
+        error: `Invalid gate. Must be one of: ${Object.values(VehicleGateStatus).join(', ')}`
       });
       return;
     }
@@ -303,7 +303,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     if (vehicle_type !== undefined) updateData.vehicle_type = vehicle_type;
     if (company !== undefined) updateData.company = company.trim();
     if (rfid_etc !== undefined) updateData.rfid_etc = rfid_etc.trim();
-    if (status !== undefined) updateData.status = status;
+    if (gate !== undefined) updateData.gate = gate;
 
     // Update the vehicle
     const updatedVehicle = await Vehicle.findByIdAndUpdate(
@@ -322,7 +322,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
         vehicle_type: updatedVehicle?.vehicle_type,
         company: updatedVehicle?.company,
         rfid_etc: updatedVehicle?.rfid_etc,
-        status: updatedVehicle?.status,
+        gate: updatedVehicle?.gate,
         createdAt: updatedVehicle?.createdAt,
         updatedAt: updatedVehicle?.updatedAt
       }

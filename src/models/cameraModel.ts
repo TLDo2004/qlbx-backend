@@ -1,11 +1,17 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+// Enum for camera gate status
+export enum CameraGateStatus {
+    GATE_IN = 'gate_in',
+    GATE_OUT = 'gate_out'
+}
+
 // Interface for Camera document
 export interface ICamera extends Document {
     ipAddress: string;
     username: string;
     password: string;
-    gate: string;
+    gate: CameraGateStatus;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -27,7 +33,8 @@ const CameraSchema = new Schema<ICamera>({
     },
     gate: {
         type: String,
-        required: true
+        required: true,
+        enum: Object.values(CameraGateStatus)
     }
 }, {
     timestamps: true,
