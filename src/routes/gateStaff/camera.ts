@@ -1,5 +1,5 @@
 import express from 'express';
-import { Camera } from '../../models';
+import { Camera, CameraGateStatus } from '../../models';
 import { internalError, created, badRequest, success, notFound } from '../../utils';
 import { gateStaffAuth } from '../../middleware/index';
 import crypto from 'crypto';
@@ -12,7 +12,7 @@ interface ICameraRequest extends express.Request {
     ipAddress: string;
     username: string;
     password: string;
-    gate: string;
+    gate: CameraGateStatus;
   };
 }
 
@@ -171,6 +171,12 @@ cameraRouter.post('/', gateStaffAuth, async (req: ICameraRequest, res: express.R
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (!ipRegex.test(ipAddress)) {
       badRequest(res, 'Invalid IP address format');
+      return;
+    }
+
+    // Validate gate enum
+    if (!Object.values(CameraGateStatus).includes(gate)) {
+      badRequest(res, `Invalid gate. Must be one of: ${Object.values(CameraGateStatus).join(', ')}`);
       return;
     }
 
