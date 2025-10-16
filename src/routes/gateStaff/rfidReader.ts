@@ -3,6 +3,7 @@ import { gateStaffAuth } from '../../middleware';
 import { badRequest, internalError } from '../../utils';
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
+import RfidBufferService from '../../services/rfidBufferService';
 
 const rfidRouter = express.Router();
 
@@ -10,13 +11,14 @@ interface IRFIDStreamRequest extends express.Request {
   body: {
     comPort: string; // e.g. "COM5"
     baudRate?: number; // default 57600 for PK-201UT
+    gateId: string; // e.g. "gate_01_in", "gate_01_out"
   };
 }
 
 // POST /rfid/alertStream - Listen to RFID reader via Serial COM
 rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, res: express.Response): Promise<void> => {
   try {
-    const { comPort, baudRate = 57600 } = req.body;
+    const { comPort, baudRate = 57600, gateId } = req.body;
 
     if (!comPort || typeof comPort !== 'string') {
       badRequest(res, 'Missing or invalid field: comPort');
@@ -24,6 +26,10 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
     }
     if (typeof baudRate !== 'number' || baudRate <= 0) {
       badRequest(res, 'Invalid baudRate');
+      return;
+    }
+    if (!gateId || typeof gateId !== 'string') {
+      badRequest(res, 'Missing or invalid field: gateId');
       return;
     }
 
@@ -116,7 +122,37 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
                 for (const tag of found) {
                   if (tag !== lastEmittedEpc) {
                     lastEmittedEpc = tag;
-                    res.write(`data: ${JSON.stringify({ type: 'rfid-epc', timestamp: new Date().toISOString(), epc: tag })}\n\n`);
+                    
+                    // Add RFID event to buffer
+                    try {
+                      const rfidBufferService = RfidBufferService.getInstance();
+                      const eventId = rfidBufferService.addRfidEvent({
+                        rfid_etc: tag,
+                        timestamp: new Date(),
+                        gateId: gateId
+                      });
+                      
+                      console.log(`RFID event added to buffer: ${eventId} (EPC: ${tag}, Gate: ${gateId})`);
+                      
+                      // Send to client
+                      res.write(`data: ${JSON.stringify({ 
+                        type: 'rfid-epc', 
+                        timestamp: new Date().toISOString(), 
+                        epc: tag,
+                        gateId: gateId,
+                        bufferEventId: eventId
+                      })}\n\n`);
+                    } catch (bufferError) {
+                      console.error('Error adding RFID event to buffer:', bufferError);
+                      // Still send to client even if buffer fails
+                      res.write(`data: ${JSON.stringify({ 
+                        type: 'rfid-epc', 
+                        timestamp: new Date().toISOString(), 
+                        epc: tag,
+                        gateId: gateId,
+                        error: 'Buffer error'
+                      })}\n\n`);
+                    }
                   }
                   // Nếu cần chỉ phát EPC đầu tiên mỗi burst, có thể break; ở đây cho phép nhiều EPC khác nhau trong cùng burst
                 }

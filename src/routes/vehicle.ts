@@ -162,8 +162,23 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
       return;
     }
 
-    // Check if vehicle with same rfid_etc already exists (if provided)
+    // Check if rfid_etc exists in rfid_etc collection and if it's already assigned (if provided)
     if (rfid_etc) {
+      // First check if rfid_etc exists in rfid_etc collection
+      const { RfidEtc } = await import('../models');
+      const existingRfidEtc = await RfidEtc.findOne({ 
+        rfid_etc: rfid_etc.trim()
+      });
+      
+      if (!existingRfidEtc) {
+        res.status(400).json({
+          success: false,
+          error: 'RFID/ETC not found in system. Please add it to rfid_etc collection first'
+        });
+        return;
+      }
+      
+      // Then check if it's already assigned to another vehicle
       const existingRfidVehicle = await Vehicle.findOne({ 
         rfid_etc: rfid_etc.trim() 
       });
@@ -281,8 +296,23 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
       return;
     }
 
-    // Check if rfid_etc is being updated and if it already exists for another vehicle
+    // Check if rfid_etc is being updated and if it exists in rfid_etc collection
     if (rfid_etc && rfid_etc !== existingVehicle.rfid_etc) {
+      // First check if rfid_etc exists in rfid_etc collection
+      const { RfidEtc } = await import('../models');
+      const existingRfidEtc = await RfidEtc.findOne({ 
+        rfid_etc: rfid_etc.trim()
+      });
+      
+      if (!existingRfidEtc) {
+        res.status(400).json({
+          success: false,
+          error: 'RFID/ETC not found in system. Please add it to rfid_etc collection first'
+        });
+        return;
+      }
+      
+      // Then check if it's already assigned to another vehicle
       const existingRfidVehicle = await Vehicle.findOne({ 
         rfid_etc: rfid_etc.trim(),
         _id: { $ne: existingVehicle._id } // Exclude current vehicle

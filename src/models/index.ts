@@ -6,3 +6,4 @@ export { GateStaff } from './gateStaffModel';
 export { Camera, CameraGateStatus } from './cameraModel';
 export { Vehicle, VehicleType, VehicleGateStatus } from './vehicleModel';
 export { RfidEtc, RfidEtcStatus } from './rfidEtcModels';
+export { Event, EventType, EventStatus } from './eventModel';
