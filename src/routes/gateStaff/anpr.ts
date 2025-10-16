@@ -2,6 +2,7 @@ import express from 'express';
 import { internalError, badRequest } from '../../utils';
 import { gateStaffAuth } from '../../middleware/index';
 import { spawn } from 'child_process';
+import CameraBufferService from '../../services/cameraBufferService';
 
 const anprRouter = express.Router();
 
@@ -12,6 +13,16 @@ interface IANPRSnapshotRequest extends express.Request {
     username: string;
     password: string;
     channel?: number; // Optional channel number, defaults to 1
+  };
+}
+
+// Interface for ANPR stream request
+interface IANPRStreamRequest extends express.Request {
+  body: {
+    ipAddress: string;
+    username: string;
+    password: string;
+    gateId: string; // e.g. "gate_01_in", "gate_01_out"
   };
 }
 
@@ -116,13 +127,13 @@ anprRouter.post('/snapshot', gateStaffAuth, async (req: IANPRSnapshotRequest, re
 });
 
 // POST /anpr/alertStream - Listen to camera events via ISAPI streaming
-anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRSnapshotRequest, res: express.Response): Promise<void> => {
+anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, res: express.Response): Promise<void> => {
   try {
-    const { ipAddress, username, password } = req.body;
+    const { ipAddress, username, password, gateId } = req.body;
 
     // Validate required fields
-    if (!ipAddress || !username || !password) {
-      badRequest(res, 'Missing required fields: ipAddress, username, password');
+    if (!ipAddress || !username || !password || !gateId) {
+      badRequest(res, 'Missing required fields: ipAddress, username, password, gateId');
       return;
     }
 
@@ -152,163 +163,271 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRSnapshotRequest,
 
       // Send initial connection message
       res.write('data: {"type": "connected", "message": "Connected to camera alert stream"}\n\n');
+      
+      // Debug response events
+      res.on('close', () => {
+        console.log('🔌 Response closed');
+        stopped = true;
+        if (currentCurl) {
+          console.log('🛑 Killing curl process due to response close');
+          currentCurl.kill('SIGTERM');
+        }
+      });
+      
+      res.on('finish', () => {
+        console.log('✅ Response finished');
+      });
+      
+      res.on('error', (err) => {
+        console.log('❌ Response error:', err);
+        stopped = true;
+        if (currentCurl) {
+          console.log('🛑 Killing curl process due to response error');
+          currentCurl.kill('SIGTERM');
+        }
+      });
 
-      // Use curl with digest authentication (like your working test)
-      const curl = spawn("curl", [
-        "--digest",
-        "-u", `${username}:${password}`,
-        "--silent", // Suppress progress information
-        "--connect-timeout", "10", // 10 second connection timeout
-        "--max-time", "0", // No overall timeout
-        "--retry", "3", // Retry 3 times on failure
-        isapiUrl
-      ]);
-
-      console.log(`Starting curl process for: ${isapiUrl}`);
-
-      let buffer = Buffer.alloc(0);
-      let boundary = null;
-
-      // Handle curl stdout data
-      curl.stdout.on("data", (chunk: Buffer) => {
-        if (res.destroyed) return;
+      // Auto-reconnectable curl process
+      let stopped = false;
+      let currentCurl: any = null;
+      
+      const startCurl = () => {
+        if (stopped || res.destroyed) {
+          console.log('🚫 startCurl blocked: stopped=', stopped, 'res.destroyed=', res.destroyed);
+          return;
+        }
         
-        buffer = Buffer.concat([buffer, chunk]);
+        // Use curl with digest authentication (like your working test)
+        const curl = spawn("curl", [
+          "--digest",
+          "-u", `${username}:${password}`,
+          "--no-buffer", // ensure streaming output without buffering
+          "--silent",
+          "--connect-timeout", "10",
+          "--max-time", "0",
+          isapiUrl
+        ]);
+        currentCurl = curl;
+        console.log(`🚀 Starting curl process for: ${isapiUrl}`);
+        console.log(`🔐 Using credentials: ${username}:${password}`);
+        console.log(`📋 Curl command: curl --digest -u ${username}:${password} --no-buffer --silent --connect-timeout 10 --max-time 0 ${isapiUrl}`);
+        console.log(`✅ Curl process spawned with PID: ${curl.pid}`);
 
-        // Detect boundary (only need to do this once)
-        if (!boundary) {
-          const match = buffer.toString().match(/^--([A-Za-z0-9_\-]+)\r\n/);
-          if (match) boundary = match[1];
-        }
+        let buffer = Buffer.alloc(0);
+        let boundary: string | null = null;
 
-        if (boundary) {
-          // Process by boundary - use binary buffer instead of string
-          const boundaryBuffer = Buffer.from(`--${boundary}`);
-          const parts = [];
-          let start = 0;
-          
-          while (true) {
-            const boundaryIndex = buffer.indexOf(boundaryBuffer, start);
-            if (boundaryIndex === -1) break;
-            
-            if (start < boundaryIndex) {
-              parts.push(buffer.slice(start, boundaryIndex));
-            }
-            start = boundaryIndex + boundaryBuffer.length;
+        // Handle curl stdout data
+        curl.stdout.on("data", (chunk: Buffer) => {
+          if (res.destroyed) {
+            console.log('🚫 curl stdout blocked: res.destroyed=', res.destroyed);
+            return;
           }
           
-          // Keep the incomplete part
-          buffer = buffer.slice(start);
+          console.log(`📥 Curl stdout data received: ${chunk.length} bytes`);
+          buffer = Buffer.concat([buffer, chunk]);
 
-          for (const part of parts) {
-            if (part.length === 0) continue;
+          // Detect boundary (only need to do this once)
+          if (!boundary) {
+            const match = buffer.toString().match(/^--([A-Za-z0-9_\-]+)\r\n/);
+            if (match) boundary = match[1];
+          }
+
+          if (boundary) {
+            // Process by boundary - use binary buffer instead of string
+            const boundaryBuffer = Buffer.from(`--${boundary}`);
+            const parts: Buffer[] = [];
+            let start = 0;
             
-            // Find header boundary
-            const headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
-            if (headerEnd === -1) continue;
+            while (true) {
+              const boundaryIndex = buffer.indexOf(boundaryBuffer, start);
+              if (boundaryIndex === -1) break;
+              
+              if (start < boundaryIndex) {
+                parts.push(buffer.slice(start, boundaryIndex));
+              }
+              start = boundaryIndex + boundaryBuffer.length;
+            }
+            
+            // Keep the incomplete part
+            buffer = buffer.slice(start);
 
-            const headers = part.slice(0, headerEnd).toString();
-            const body = part.slice(headerEnd + 4);
+            for (const part of parts) {
+              if (part.length === 0) continue;
+              
+              // Find header boundary
+              const headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
+              if (headerEnd === -1) continue;
 
-            // Get content type and filename
-            const typeMatch = headers.match(/Content-Type:\s*([^\r\n]+)/i);
-            const filenameMatch = headers.match(/filename="([^"]+)"/);
-            const contentType = typeMatch ? typeMatch[1] : null;
-            const filename = filenameMatch ? filenameMatch[1] : null;
+              const headers = part.slice(0, headerEnd).toString();
+              const body = part.slice(headerEnd + 4);
 
-            if (contentType === "application/xml" || contentType === "text/xml") {
-              // Send XML data as event
-              res.write(`data: ${JSON.stringify({
-                type: 'event',
-                timestamp: new Date().toISOString(),
-                data: body.toString(),
-                format: 'xml',
-                filename: filename,
-                contentType: contentType
-              })}\n\n`);
-            } else if (contentType === "image/jpeg" || contentType === "image/jpg") {
-              // Send image data
-              res.write(`data: ${JSON.stringify({
-                type: 'image',
-                timestamp: new Date().toISOString(),
-                data: body.toString('base64'),
-                format: 'jpeg',
-                filename: filename,
-                contentType: contentType,
-                size: body.length
-              })}\n\n`);
-            } else if (contentType) {
-              // Send other content types
-              res.write(`data: ${JSON.stringify({
-                type: 'data',
-                timestamp: new Date().toISOString(),
-                data: body.toString('base64'),
-                format: contentType,
-                filename: filename,
-                size: body.length
-              })}\n\n`);
+                  // Get content type and filename
+                  const typeMatch = headers.match(/Content-Type:\s*([^\r\n]+)/i);
+                  const filenameMatch = headers.match(/filename="([^"]+)"/);
+                  const contentType = typeMatch ? typeMatch[1] : null;
+                  const filename = filenameMatch ? filenameMatch[1] : null;
+                  
+                  console.log(`📋 Content-Type: ${contentType}, Filename: ${filename}, Body size: ${body.length} bytes`);
+
+              if (contentType === "application/xml" || contentType === "text/xml") {
+                // Send XML data as event (original logic)
+                res.write(`data: ${JSON.stringify({
+                  type: 'event',
+                  timestamp: new Date().toISOString(),
+                  data: body.toString(),
+                  format: 'xml',
+                  filename: filename,
+                  contentType: contentType
+                })}\n\n`);
+                
+                // Extract license plate and add to buffer
+                try {
+                  const xmlData = body.toString();
+                  console.log('📄 XML Data received:', xmlData.substring(0, 200) + '...');
+                  
+                  const licensePlate = extractLicensePlateFromXML(xmlData);
+                  console.log('🔍 Extracted license plate:', licensePlate);
+                  
+                  if (licensePlate) {
+                    const cameraBufferService = CameraBufferService.getInstance();
+                    const eventId = cameraBufferService.addCameraEvent({
+                      license_plate: licensePlate,
+                      timestamp: new Date(),
+                      gateId: gateId,
+                      imageData: null
+                    });
+                    
+                    console.log(`🎯 Camera event added to buffer: ${eventId} (License: ${licensePlate}, Gate: ${gateId})`);
+                  } else {
+                    console.log('❌ No license plate found in XML data');
+                  }
+                } catch (bufferError) {
+                  console.error('Error processing camera event for buffer:', bufferError);
+                  // Don't break the original flow
+                }
+              } else if (contentType === "image/jpeg" || contentType === "image/jpg") {
+                // Send image data
+                console.log(`🖼️ Image received: ${filename}, size: ${body.length} bytes`);
+                res.write(`data: ${JSON.stringify({
+                  type: 'image',
+                  timestamp: new Date().toISOString(),
+                  data: body.toString('base64'),
+                  format: 'jpeg',
+                  filename: filename,
+                  contentType: contentType,
+                  size: body.length
+                })}\n\n`);
+              } else if (contentType) {
+                // Send other content types
+                res.write(`data: ${JSON.stringify({
+                  type: 'data',
+                  timestamp: new Date().toISOString(),
+                  data: body.toString('base64'),
+                  format: contentType,
+                  filename: filename,
+                  size: body.length
+                })}\n\n`);
+              }
             }
           }
-        }
-      });
+        });
 
-      // Handle curl stderr
-      curl.stderr.on("data", (err: Buffer) => {
-        const errorText = err.toString();
-        console.error('Curl stderr:', errorText);
-        if (!res.destroyed) {
-          res.write(`data: ${JSON.stringify({
-            type: 'error',
-            timestamp: new Date().toISOString(),
-            error: errorText
-          })}\n\n`);
-        }
-      });
+        // Handle curl stderr
+        curl.stderr.on("data", (err: Buffer) => {
+          const errorText = err.toString();
+          console.error('❌ Curl stderr:', errorText);
+          if (!res.destroyed) {
+            res.write(`data: ${JSON.stringify({
+              type: 'error',
+              timestamp: new Date().toISOString(),
+              error: errorText
+            })}\n\n`);
+          }
+        });
 
-      // Handle curl exit
-      curl.on('exit', (code: number | null, signal: string | null) => {
-        console.log(`Curl process exited with code ${code}, signal: ${signal}`);
-        if (!res.destroyed) {
-          res.write(`data: ${JSON.stringify({
-            type: 'disconnected',
-            timestamp: new Date().toISOString(),
-            message: `Curl process exited with code ${code}, signal: ${signal}`
-          })}\n\n`);
-          res.end();
-        }
-      });
+        // Handle curl exit (auto-reconnect)
+        curl.on('exit', (code: number | null, signal: string | null) => {
+          console.log(`🔄 Curl process exited with code ${code}, signal: ${signal}`);
+          if (!res.destroyed && !stopped) {
+            res.write(`data: ${JSON.stringify({
+              type: 'disconnected',
+              timestamp: new Date().toISOString(),
+              message: `curl exited code=${code}, signal=${signal}, reconnecting...`
+            })}\n\n`);
+            console.log(`🔄 Attempting to reconnect in 2 seconds...`);
+            setTimeout(() => {
+              if (!res.destroyed && !stopped) {
+                startCurl();
+              }
+            }, 2000);
+          }
+        });
 
-      // Handle curl error
-      curl.on('error', (error: any) => {
-        console.error('Curl process error:', error);
-        if (!res.destroyed) {
-          res.write(`data: ${JSON.stringify({
-            type: 'error',
-            timestamp: new Date().toISOString(),
-            error: error.message
-          })}\n\n`);
-          res.end();
-        }
-      });
+        // Handle curl error
+        curl.on('error', (error: any) => {
+          console.error('❌ Curl process error:', error);
+          if (!res.destroyed && !stopped) {
+            res.write(`data: ${JSON.stringify({
+              type: 'error',
+              timestamp: new Date().toISOString(),
+              error: error.message
+            })}\n\n`);
+          }
+        });
+      };
+
+      // Kick off first connection
+      startCurl();
 
       // Handle client disconnect
       req.on('close', () => {
-        console.log('Client disconnected from alert stream');
-        curl.kill('SIGTERM');
+        console.log('🔌 Client disconnected from alert stream');
+        console.log('🔍 req.destroyed:', req.destroyed);
+        console.log('🔍 res.destroyed:', res.destroyed);
+        console.log('🔍 stopped:', stopped);
+        
+        // Only kill curl if response is also destroyed
+        if (res.destroyed) {
+          stopped = true;
+          if (currentCurl) {
+            console.log('🛑 Killing curl process due to client disconnect');
+            currentCurl.kill('SIGTERM');
+          }
+        } else {
+          console.log('⚠️ Request closed but response still alive, not killing curl');
+        }
       });
 
       req.on('aborted', () => {
-        console.log('Client request aborted');
-        curl.kill('SIGTERM');
+        console.log('🔌 Client request aborted');
+        console.log('🔍 req.destroyed:', req.destroyed);
+        console.log('🔍 res.destroyed:', res.destroyed);
+        console.log('🔍 stopped:', stopped);
+        
+        // Only kill curl if response is also destroyed
+        if (res.destroyed) {
+          stopped = true;
+          if (currentCurl) {
+            console.log('🛑 Killing curl process due to client abort');
+            currentCurl.kill('SIGTERM');
+          }
+        } else {
+          console.log('⚠️ Request aborted but response still alive, not killing curl');
+        }
       });
 
       // Keep alive mechanism
       const keepAliveInterval = setInterval(() => {
         if (!res.destroyed) {
+          console.log('💓 Sending keepalive...');
           res.write('data: {"type": "keepalive", "timestamp": "' + new Date().toISOString() + '"}\n\n');
         } else {
+          console.log('🚫 Keepalive stopped: res.destroyed=', res.destroyed);
           clearInterval(keepAliveInterval);
-          curl.kill('SIGTERM');
+          if (currentCurl) {
+            console.log('🛑 Killing curl process from keepalive');
+            currentCurl.kill('SIGTERM');
+          }
         }
       }, 10000); // Send keepalive every 10 seconds
 
@@ -527,6 +646,26 @@ anprRouter.post('/downloadImage', gateStaffAuth, async (req: IDownloadImageReque
     internalError(res, 'Internal server error while downloading image');
   }
 });
+
+
+
+// Helper function to extract license plate from XML
+function extractLicensePlateFromXML(xmlData: string): string | null {
+  try {
+    // Extract license plate from XML
+    const licensePlateRegex = /<licensePlate[^>]*>([^<]+)<\/licensePlate>/i;
+    const match = xmlData.match(licensePlateRegex);
+    
+    if (match && match[1]) {
+      return match[1].trim().toUpperCase();
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error extracting license plate from XML:', error);
+    return null;
+  }
+}
 
 // Helper function to parse search response XML
 function parseSearchResponse(xmlResponse: string, ipAddress: string): any[] {
