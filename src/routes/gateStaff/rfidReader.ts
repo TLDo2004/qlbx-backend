@@ -60,6 +60,8 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
     try {
       // Chống trùng lặp: chỉ phát khi EPC thay đổi so với lần gần nhất
       let lastEmittedEpc: string | null = null;
+      // Track if current EPC has been added to buffer
+      let currentEpcAddedToBuffer: boolean = false;
 
       // Gom các mảnh dữ liệu liên tiếp thành một "burst"
       let burstParts: string[] = [];
@@ -100,30 +102,28 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
               burstParts = [];
 
               if (!res.destroyed && burstHex.length > 0) {
-                // Trích xuất EPC theo 2 dạng phổ biến:
-                // 1) Khung có prefix 07 00 EE 00 + 4 bytes EPC (ví dụ demo: 07 00 EE 00 18 9D 54 1A)
-                // 2) Dòng hex bắt đầu bằng E2... (một số reader trả EPC bắt đầu E2)
+                // Trích xuất EPC theo format PK-201UT:
+                // Khung có prefix 07 00 EE 00 + 4 bytes EPC (ví dụ demo: 07 00 EE 00 18 9D 54 1A)
                 const found = new Set<string>();
 
-                // Dạng 1: 0700EE00XXXXXXXX (XXXXXXXX = 8 hex = 4 bytes EPC)
+                // Format: 0700EE00XXXXXXXX (XXXXXXXX = 8 hex = 4 bytes EPC)
                 const rePk201 = /0700EE00([0-9A-F]{8})/g;
                 let m1: RegExpExecArray | null;
                 while ((m1 = rePk201.exec(burstHex)) !== null) {
                   found.add(m1[1]);
                 }
 
-                // Dạng 2: E2 + ≥ 6 hex (giữ nguyên nếu bắt gặp)
-                const reE2 = /(E2[0-9A-F]{6,})/g;
-                let m2: RegExpExecArray | null;
-                while ((m2 = reE2.exec(burstHex)) !== null) {
-                  found.add(m2[1]);
-                }
-
                 for (const tag of found) {
                   if (tag !== lastEmittedEpc) {
+                    // New EPC detected - reset buffer flag and add to buffer
                     lastEmittedEpc = tag;
+                    currentEpcAddedToBuffer = false;
                     
-                    // Add RFID event to buffer
+                    console.log(`🆕 New RFID EPC detected: ${tag} (Gate: ${gateId})`);
+                  }
+                  
+                  // Add to buffer only once per EPC
+                  if (!currentEpcAddedToBuffer) {
                     try {
                       const rfidBufferService = RfidBufferService.getInstance();
                       const eventId = rfidBufferService.addRfidEvent({
@@ -132,7 +132,8 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
                         gateId: gateId
                       });
                       
-                      console.log(`RFID event added to buffer: ${eventId} (EPC: ${tag}, Gate: ${gateId})`);
+                      currentEpcAddedToBuffer = true;
+                      console.log(`✅ RFID event added to buffer: ${eventId} (EPC: ${tag}, Gate: ${gateId})`);
                       
                       // Send to client
                       res.write(`data: ${JSON.stringify({ 
@@ -143,7 +144,7 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
                         bufferEventId: eventId
                       })}\n\n`);
                     } catch (bufferError) {
-                      console.error('Error adding RFID event to buffer:', bufferError);
+                      console.error('❌ Error adding RFID event to buffer:', bufferError);
                       // Still send to client even if buffer fails
                       res.write(`data: ${JSON.stringify({ 
                         type: 'rfid-epc', 
@@ -154,7 +155,6 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
                       })}\n\n`);
                     }
                   }
-                  // Nếu cần chỉ phát EPC đầu tiên mỗi burst, có thể break; ở đây cho phép nhiều EPC khác nhau trong cùng burst
                 }
               }
             }, 40); // 40ms không nhận thêm bytes => kết thúc 1 burst
