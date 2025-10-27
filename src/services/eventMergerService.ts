@@ -152,12 +152,20 @@ class EventMergerService {
    */
   private async processRfidEventFIFO(rfidEvent: IRfidEvent, cameraEvents: ICameraEvent[]): Promise<void> {
     try {
+      // Populate license_plate from database if not already set
+      if (!rfidEvent.license_plate) {
+        const vehicle = await this.lookupVehicleByRfid(rfidEvent.rfid_etc);
+        if (vehicle) {
+          rfidEvent.license_plate = vehicle.license_plate;
+        }
+      }
+
       // Check if event is expired
       if (this.isEventExpired(rfidEvent.timestamp)) {
         await this.createRfidOnlyEvent(rfidEvent);
         const rfidBufferService = RfidBufferService.getInstance();
         rfidBufferService.markRfidEventAsProcessed(rfidEvent.id); // Mark as processed first
-        console.log(`Created RFID-only event for ${rfidEvent.id}`);
+        console.log(`Created RFID-only event for ${rfidEvent.license_plate}`);
         return;
       }
 
@@ -177,13 +185,13 @@ class EventMergerService {
         rfidBufferService.markRfidEventAsProcessed(rfidEvent.id);
         cameraBufferService.markCameraEventAsProcessed(bestMatch.id);
         
-        console.log(`Merged RFID event ${rfidEvent.id} with Camera event ${bestMatch.id}`);
+        console.log(`Merged RFID event ${rfidEvent.rfid_etc} with Camera event ${bestMatch.license_plate}`);
       } else {
         // No camera match found, leave it for next iteration
-        console.log(`No match found for RFID event ${rfidEvent.id}, keeping for next iteration`);
+        console.log(`No match found for RFID event ${rfidEvent.rfid_etc} - ${rfidEvent.license_plate}, keeping for next iteration`);
       }
     } catch (error) {
-      console.error(`Error processing RFID event ${rfidEvent.id}:`, error);
+      console.error(`Error processing RFID event ${rfidEvent.rfid_etc}:`, error);
     }
   }
 
@@ -197,7 +205,7 @@ class EventMergerService {
         await this.createCameraOnlyEvent(cameraEvent);
         const cameraBufferService = CameraBufferService.getInstance();
         cameraBufferService.markCameraEventAsProcessed(cameraEvent.id); // Mark as processed first
-        console.log(`Created Camera-only event for ${cameraEvent.id}`);
+        console.log(`Created Camera-only event for ${cameraEvent.license_plate}`);
         return;
       }
 
@@ -217,13 +225,13 @@ class EventMergerService {
         rfidBufferService.markRfidEventAsProcessed(bestMatch.id);
         cameraBufferService.markCameraEventAsProcessed(cameraEvent.id);
         
-        console.log(`Merged Camera event ${cameraEvent.id} with RFID event ${bestMatch.id}`);
+        console.log(`Merged Camera event ${cameraEvent.license_plate} with RFID event ${bestMatch.license_plate}`);
       } else {
         // No RFID match found, leave it for next iteration
-        console.log(`No match found for Camera event ${cameraEvent.id}, keeping for next iteration`);
+        console.log(`No match found for Camera event ${cameraEvent.license_plate}, keeping for next iteration`);
       }
     } catch (error) {
-      console.error(`Error processing Camera event ${cameraEvent.id}:`, error);
+      console.error(`Error processing Camera event ${cameraEvent.license_plate}:`, error);
     }
   }
 
@@ -241,39 +249,27 @@ class EventMergerService {
    */
   private async lookupVehicleByLicensePlate(license_plate: string): Promise<any | null> {
     try {
-      console.log(`[DEBUG] lookupVehicleByLicensePlate input: "${license_plate}"`);
-      
       // First try exact match
       let vehicle = await Vehicle.findOne({ license_plate: license_plate });
-      console.log(`[DEBUG] Exact match result:`, vehicle ? 'FOUND' : 'NOT FOUND');
       
       if (!vehicle) {
         // Try with formatted license plate
-        const formattedPlate = this.formatLicensePlate(license_plate);
-        console.log(`[DEBUG] Trying formatted plate: "${formattedPlate}"`);
+        const formattedPlate = license_plate;
         vehicle = await Vehicle.findOne({ license_plate: formattedPlate });
-        console.log(`[DEBUG] Formatted match result:`, vehicle ? 'FOUND' : 'NOT FOUND');
       }
       
       if (!vehicle) {
         // Try to find by matching all possible formats in database
-        console.log(`[DEBUG] Trying fuzzy match with all vehicles...`);
         const allVehicles = await Vehicle.find({});
-        const formattedInput = this.formatLicensePlate(license_plate);
-        console.log(`[DEBUG] Formatted input: "${formattedInput}"`);
+        const formattedInput = license_plate;
         
         vehicle = allVehicles.find(v => {
-          const formattedDbPlate = this.formatLicensePlate(v.license_plate);
+          const formattedDbPlate = v.license_plate;
           const matches = formattedDbPlate === formattedInput;
-          if (matches) {
-            console.log(`[DEBUG] Found fuzzy match: DB plate "${v.license_plate}" -> "${formattedDbPlate}" matches input "${formattedInput}"`);
-          }
           return matches;
         });
-        console.log(`[DEBUG] Fuzzy match result:`, vehicle ? 'FOUND' : 'NOT FOUND');
       }
       
-      console.log(`[DEBUG] Final result:`, vehicle ? `FOUND vehicle ${vehicle._id}` : 'NOT FOUND');
       return vehicle || null; // Ensure we return null if vehicle is falsy
     } catch (error) {
       console.error('Error looking up vehicle by license plate:', error);
@@ -316,33 +312,6 @@ class EventMergerService {
   }
 
   /**
-   * Format license plate to ensure it has the correct format with "-"
-   */
-  private formatLicensePlate(licensePlate: string): string {
-    if (!licensePlate) return 'UNKNOWN';
-    
-    // Remove all spaces and convert to uppercase
-    const cleaned = licensePlate.replace(/\s/g, '').toUpperCase();
-    
-    // If it already has a dash, return as is
-    if (cleaned.includes('-')) {
-      return cleaned;
-    }
-    
-    // If it's 7 or 8 characters and starts with 2 digits and 1 letter, add dash after 3rd character
-    if ((cleaned.length === 7 || cleaned.length === 8) && /^\d{2}[A-Z]/.test(cleaned)) {
-      return cleaned.slice(0, 3) + '-' + cleaned.slice(3);
-    }
-    
-    // If it's 8 or 9 characters and starts with 2 digits and 2 letters, add dash after 4th character
-    if ((cleaned.length === 8 || cleaned.length === 9) && /^\d{2}[A-Z]{2}/.test(cleaned)) {
-      return cleaned.slice(0, 4) + '-' + cleaned.slice(4);
-    }
-    
-    return cleaned;
-  }
-
-  /**
    * Determine event status based on event type and vehicle lookup
    */
   private async determineEventStatus(
@@ -368,8 +337,8 @@ class EventMergerService {
       // Both exist in database and RFID is not expired => accepted
       if (rfidExists && vehicleByRfidExists && vehicleByLicensePlateExists && !rfidExpired) {
         // Check if license plates match (format both before comparing)
-        const formattedRfidPlate = this.formatLicensePlate(vehicleByRfid.license_plate);
-        const formattedCameraPlate = this.formatLicensePlate(cameraEvent.license_plate);
+        const formattedRfidPlate = vehicleByRfid.license_plate;
+        const formattedCameraPlate = cameraEvent.license_plate;
         
         if (formattedRfidPlate === formattedCameraPlate) {
           // Use vehicleByRfid as primary
@@ -399,7 +368,7 @@ class EventMergerService {
       }
 
       // Only RFID not in database => etc_error
-      if (!rfidExists && vehicleByLicensePlateExists) {
+      if (rfidExists && !vehicleByRfidExists && vehicleByLicensePlateExists) {
         return { 
           status: EventStatus.ETC_ERROR,
           failureReason: 'RFID not found in database but vehicle exists'
@@ -407,7 +376,7 @@ class EventMergerService {
       }
 
       // Only license plate not in database => rejected
-      if (rfidExists && vehicleByRfidExists && !vehicleByLicensePlateExists) {
+      if (rfidExists && vehicleByRfidExists && !vehicleByLicensePlateExists && !rfidExpired) {
         return { 
           status: EventStatus.REJECTED,
           failureReason: 'License plate not found in database'
@@ -415,7 +384,7 @@ class EventMergerService {
       }
 
       // Both not in database => rejected (new vehicle)
-      if (!rfidExists && !vehicleByLicensePlateExists) {
+      if (rfidExists && !vehicleByRfidExists && !vehicleByLicensePlateExists) {
         return { 
           status: EventStatus.REJECTED,
           failureReason: 'New vehicle - both RFID and license plate not found'
@@ -432,10 +401,10 @@ class EventMergerService {
 
       const rfidExists = rfidLookup.rfidEtc !== null;
       const rfidExpired = rfidLookup.isExpired;
-      const vehicleExists = vehicleByRfid !== null;
+      const vehicleByRfidExists = vehicleByRfid !== null;
 
       // RFID exists and not expired => accepted
-      if (rfidExists && vehicleExists && !rfidExpired) {
+      if (rfidExists && vehicleByRfidExists && !rfidExpired) {
         return { 
           status: EventStatus.ACCEPTED,
           vehicle_id: vehicleByRfid?._id?.toString(),
@@ -444,7 +413,7 @@ class EventMergerService {
       }
 
       // RFID exists but expired => etc_error
-      if (rfidExists && vehicleExists && rfidExpired) {
+      if (rfidExists && vehicleByRfidExists && rfidExpired) {
         return { 
           status: EventStatus.ETC_ERROR,
           failureReason: 'RFID detected but expired',
@@ -454,7 +423,7 @@ class EventMergerService {
       }
 
       // RFID not in database => rejected (new vehicle)
-      if (!rfidExists) {
+      if (rfidExists && !vehicleByRfidExists) {
         return { 
           status: EventStatus.REJECTED,
           failureReason: 'New vehicle - RFID not found in database'
@@ -464,20 +433,11 @@ class EventMergerService {
 
     // Case 3: Camera only (license plate only)
     if (eventType === EventType.CAMERA_ONLY && cameraEvent) {
-      console.log(`[DEBUG] Looking up vehicle for license plate: "${cameraEvent.license_plate}"`);
       const vehicleByLicensePlate = await this.lookupVehicleByLicensePlate(cameraEvent.license_plate);
-      const vehicleExists = vehicleByLicensePlate !== null && vehicleByLicensePlate !== undefined;
-      
-      console.log(`[DEBUG] Vehicle lookup result:`, {
-        inputPlate: cameraEvent.license_plate,
-        found: vehicleExists,
-        vehicleId: vehicleByLicensePlate?._id?.toString(),
-        vehiclePlate: vehicleByLicensePlate?.license_plate,
-        rawVehicle: vehicleByLicensePlate
-      });
-
+      const vehicleByLicensePlateExists = vehicleByLicensePlate !== null && vehicleByLicensePlate !== undefined;
+    
       // License plate exists => no_etc
-      if (vehicleExists) {
+      if (vehicleByLicensePlateExists) {
         return { 
           status: EventStatus.NO_ETC,
           failureReason: 'No RFID/ETC detected but vehicle exists',
@@ -530,9 +490,9 @@ class EventMergerService {
           try {
             await this.createRfidOnlyEvent(rfidEvent);
             rfidBufferService.markRfidEventAsProcessed(rfidEvent.id); // Mark as processed first
-            console.log(`Processed expired RFID event ${rfidEvent.id}`);
+            console.log(`Processed expired RFID event ${rfidEvent.rfid_etc} - ${rfidEvent.license_plate}`);
           } catch (error) {
-            console.error(`Error processing expired RFID event ${rfidEvent.id}:`, error);
+            console.error(`Error processing expired RFID event ${rfidEvent.rfid_etc} - ${rfidEvent.license_plate}:`, error);
           }
         }
       }
@@ -544,9 +504,9 @@ class EventMergerService {
           try {
             await this.createCameraOnlyEvent(cameraEvent);
             cameraBufferService.markCameraEventAsProcessed(cameraEvent.id); // Mark as processed first
-            console.log(`Processed expired Camera event ${cameraEvent.id}`);
+            console.log(`Processed expired Camera event ${cameraEvent.license_plate}`);
           } catch (error) {
-            console.error(`Error processing expired Camera event ${cameraEvent.id}:`, error);
+            console.error(`Error processing expired Camera event ${cameraEvent.license_plate}:`, error);
           }
         }
       }
@@ -566,13 +526,14 @@ class EventMergerService {
       // Check if same gate
       if (cameraEvent.gateId !== rfidEvent.gateId) return false;
 
-      // Check if license plate matches (if available in RFID event)
-      if (rfidEvent.license_plate) {
-        const formattedRfidPlate = this.formatLicensePlate(rfidEvent.license_plate);
-        const formattedCameraPlate = this.formatLicensePlate(cameraEvent.license_plate);
-        if (formattedRfidPlate !== formattedCameraPlate) {
-          return false;
-        }
+      // Check if rfid has license plate
+      if (!rfidEvent.license_plate) return false;
+
+      // Check if license plate matches
+      const formattedRfidPlate = rfidEvent.license_plate;
+      const formattedCameraPlate = cameraEvent.license_plate;
+      if (formattedRfidPlate !== formattedCameraPlate) {
+        return false;
       }
 
       // Check time difference
@@ -607,13 +568,14 @@ class EventMergerService {
       // Check if same gate
       if (rfidEvent.gateId !== cameraEvent.gateId) return false;
 
-      // Check if license plate matches (if RFID has license plate)
-      if (rfidEvent.license_plate) {
-        const formattedRfidPlate = this.formatLicensePlate(rfidEvent.license_plate);
-        const formattedCameraPlate = this.formatLicensePlate(cameraEvent.license_plate);
-        if (formattedRfidPlate !== formattedCameraPlate) {
-          return false;
-        }
+      // Check if rfid has license plate
+      if (!rfidEvent.license_plate) return false;
+
+      // Check if license plate matches
+      const formattedRfidPlate = rfidEvent.license_plate;
+      const formattedCameraPlate = cameraEvent.license_plate;
+      if (formattedRfidPlate !== formattedCameraPlate) {
+        return false;
       }
 
       // Check time difference
@@ -651,7 +613,7 @@ class EventMergerService {
       const eventData = {
         eventType: EventType.MERGED,
         status: status,
-        license_plate: this.formatLicensePlate(license_plate || cameraEvent.license_plate),
+        license_plate: license_plate || cameraEvent.license_plate,
         vehicle_id: vehicle_id,
         gateId: rfidEvent.gateId,
         timestamp: new Date(), // Current time
@@ -661,7 +623,7 @@ class EventMergerService {
           gateId: rfidEvent.gateId
         },
         cameraEvent: {
-          license_plate: this.formatLicensePlate(cameraEvent.license_plate),
+          license_plate: cameraEvent.license_plate,
           timestamp: cameraEvent.timestamp,
           gateId: cameraEvent.gateId,
           imageData: cameraEvent.imageData
@@ -692,7 +654,7 @@ class EventMergerService {
       const eventData = {
         eventType: EventType.RFID_ONLY,
         status: status,
-        license_plate: this.formatLicensePlate(license_plate || rfidEvent.license_plate || 'UNKNOWN'),
+        license_plate: license_plate || rfidEvent.license_plate || 'UNKNOWN',
         vehicle_id: vehicle_id,
         gateId: rfidEvent.gateId,
         timestamp: new Date(),
@@ -727,12 +689,12 @@ class EventMergerService {
       const eventData = {
         eventType: EventType.CAMERA_ONLY,
         status: status,
-        license_plate: this.formatLicensePlate(cameraEvent.license_plate),
+        license_plate: cameraEvent.license_plate,
         vehicle_id: vehicle_id,
         gateId: cameraEvent.gateId,
         timestamp: new Date(),
         cameraEvent: {
-          license_plate: this.formatLicensePlate(cameraEvent.license_plate),
+          license_plate: cameraEvent.license_plate,
           timestamp: cameraEvent.timestamp,
           gateId: cameraEvent.gateId,
           imageData: cameraEvent.imageData
