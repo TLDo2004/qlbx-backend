@@ -14,7 +14,7 @@ class CameraBufferService {
   private constructor() {
     // Default configuration
     this.config = {
-      deltaTimeThreshold: 10000, // 10 seconds
+      deltaTimeThreshold: 5000, // 5 seconds
       maxBufferSize: 1000, // Maximum 1000 events per buffer
       cleanupInterval: 30000 // Cleanup every 30 seconds
     };
@@ -143,7 +143,7 @@ class CameraBufferService {
    */
   public cleanupExpiredEvents(): number {
     const now = Date.now();
-    const maxAge = this.config.deltaTimeThreshold * 2; // 2x threshold to ensure no missed events
+    const maxAge = 15000; // 15 seconds - fixed expired time
     let cleanedCount = 0;
 
     for (const [id, event] of this.cameraBuffer) {
@@ -161,6 +161,61 @@ class CameraBufferService {
     }
 
     return cleanedCount;
+  }
+
+  /**
+   * Remove specific event from buffer
+   */
+  public removeCameraEvent(eventId: string): boolean {
+    const existed = this.cameraBuffer.has(eventId);
+    if (existed) {
+      this.cameraBuffer.delete(eventId);
+      console.log(`[Camera Buffer] Removed event: ${eventId}`);
+    }
+    return existed;
+  }
+
+  /**
+   * Remove only processed events (already saved to database)
+   */
+  public removeProcessedEvents(): number {
+    let removedCount = 0;
+
+    for (const [id, event] of this.cameraBuffer) {
+      if (event.processed) {
+        this.cameraBuffer.delete(id);
+        removedCount++;
+      }
+    }
+
+    if (removedCount > 0) {
+      console.log(`[Camera Buffer] Removed ${removedCount} processed events`);
+    }
+
+    return removedCount;
+  }
+
+  /**
+   * Remove expired or processed events
+   */
+  public removeExpiredOrProcessedEvents(): number {
+    let removedCount = 0;
+    const now = Date.now();
+    const maxAge = 15000; // 15 seconds
+
+    for (const [id, event] of this.cameraBuffer) {
+      const eventAge = now - event.timestamp.getTime();
+      if (eventAge > maxAge || event.processed) {
+        this.cameraBuffer.delete(id);
+        removedCount++;
+      }
+    }
+
+    if (removedCount > 0) {
+      console.log(`[Camera Buffer] Removed ${removedCount} expired/processed events`);
+    }
+
+    return removedCount;
   }
 
   /**

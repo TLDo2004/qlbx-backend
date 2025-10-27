@@ -230,7 +230,7 @@ eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: 
       updatedAt: new Date()
     };
 
-    if (status === EventStatus.FAILED && failureReason) {
+    if ((status === EventStatus.ETC_ERROR || status === EventStatus.REJECTED) && failureReason) {
       updateData.failureReason = failureReason;
     }
 
@@ -268,17 +268,19 @@ eventRouter.get('/stats/summary', gateStaffAuth, async (req: express.Request, re
       mergedEvents,
       rfidOnlyEvents,
       cameraOnlyEvents,
-      pendingEvents,
-      processedEvents,
-      failedEvents
+      acceptedEvents,
+      rejectedEvents,
+      etcErrorEvents,
+      noEtcEvents
     ] = await Promise.all([
       Event.countDocuments(dateFilter),
       Event.countDocuments({ ...dateFilter, eventType: EventType.MERGED }),
       Event.countDocuments({ ...dateFilter, eventType: EventType.RFID_ONLY }),
       Event.countDocuments({ ...dateFilter, eventType: EventType.CAMERA_ONLY }),
-      Event.countDocuments({ ...dateFilter, status: EventStatus.PENDING }),
-      Event.countDocuments({ ...dateFilter, status: EventStatus.PROCESSED }),
-      Event.countDocuments({ ...dateFilter, status: EventStatus.FAILED })
+      Event.countDocuments({ ...dateFilter, status: EventStatus.ACCEPTED }),
+      Event.countDocuments({ ...dateFilter, status: EventStatus.REJECTED }),
+      Event.countDocuments({ ...dateFilter, status: EventStatus.ETC_ERROR }),
+      Event.countDocuments({ ...dateFilter, status: EventStatus.NO_ETC })
     ]);
 
     const stats = {
@@ -289,9 +291,10 @@ eventRouter.get('/stats/summary', gateStaffAuth, async (req: express.Request, re
         cameraOnly: cameraOnlyEvents
       },
       status: {
-        pending: pendingEvents,
-        processed: processedEvents,
-        failed: failedEvents
+        accepted: acceptedEvents,
+        rejected: rejectedEvents,
+        etcError: etcErrorEvents,
+        noEtc: noEtcEvents
       },
       dateRange: {
         startDate: startDate || null,
