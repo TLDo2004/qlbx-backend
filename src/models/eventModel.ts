@@ -9,9 +9,10 @@ export enum EventType {
 
 // Enum for event status
 export enum EventStatus {
-    PENDING = 'pending',         // Event created, waiting for processing
-    PROCESSED = 'processed',     // Event has been processed
-    FAILED = 'failed'           // Event processing failed
+    ACCEPTED = 'accepted',       // Vehicle is accepted to enter the station
+    REJECTED = 'rejected',       // New vehicle that is not existing in the system
+    ETC_ERROR = 'etc_error',     // RFID/ETC detected but error (eg. expired, invalid, ...)
+    NO_ETC = 'no_etc',           // RFID/ETC not detected
 }
 
 // Interface for RFID event data
@@ -67,7 +68,7 @@ const EventSchema = new Schema<IEvent>({
         type: String,
         required: true,
         enum: Object.values(EventStatus),
-        default: EventStatus.PENDING
+        default: EventStatus.REJECTED
     },
     timestamp: {
         type: Date,
