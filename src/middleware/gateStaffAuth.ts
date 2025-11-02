@@ -7,6 +7,12 @@ interface AuthenticatedRequest extends Request {
 }
 
 const gateStaffAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // Internal bypass using API key header for server-side calls
+    const internalKey = req.header('x-internal-api-key');
+    if (internalKey && process.env.INTERNAL_API_KEY && internalKey === process.env.INTERNAL_API_KEY) {
+        return next();
+    }
+
     if (req.userRole?.includes('gate_staff')) {
         next();
     } else {

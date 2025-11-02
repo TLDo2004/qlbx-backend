@@ -20,6 +20,8 @@ export interface ICameraEvent {
   license_plate: string;
   gateId: string; // e.g., "gate_01_in", "gate_01_out"
   imageData?: string; // base64 image data (optional)
+  imageUrl?: string; // URL to image stored in cloud (optional)
+  imagesReady?: boolean; // signals images have been collected/uploaded
   processed: boolean;
 }
 
