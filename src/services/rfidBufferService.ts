@@ -53,7 +53,7 @@ class RfidBufferService {
       this.cleanupOldestEvents();
     }
 
-    console.log(`[RFID Buffer] Added event: ${eventId}, Gate: ${rfidEvent.gateId}, RFID: ${rfidEvent.rfid_etc}`);
+    console.log(`[RFID Buffer] Gate: ${rfidEvent.gateId}, RFID: ${rfidEvent.rfid_etc}`);
     
     return eventId;
   }
@@ -96,7 +96,6 @@ class RfidBufferService {
     const event = this.rfidBuffer.get(eventId);
     if (event) {
       event.processed = true;
-      console.log(`[RFID Buffer] Marked event as processed: ${eventId}`);
       return true;
     }
     return false;
@@ -120,7 +119,6 @@ class RfidBufferService {
    */
   public updateConfig(newConfig: Partial<IBufferConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    console.log(`[RFID Buffer] Configuration updated:`, this.config);
   }
 
   /**
@@ -140,10 +138,6 @@ class RfidBufferService {
     }
 
     this.lastCleanup = new Date();
-    
-    if (cleanedCount > 0) {
-      console.log(`[RFID Buffer] Cleaned up ${cleanedCount} expired events`);
-    }
 
     return cleanedCount;
   }
@@ -155,7 +149,6 @@ class RfidBufferService {
     const existed = this.rfidBuffer.has(eventId);
     if (existed) {
       this.rfidBuffer.delete(eventId);
-      console.log(`[RFID Buffer] Removed event: ${eventId}`);
     }
     return existed;
   }
@@ -171,10 +164,6 @@ class RfidBufferService {
         this.rfidBuffer.delete(id);
         removedCount++;
       }
-    }
-
-    if (removedCount > 0) {
-      console.log(`[RFID Buffer] Removed ${removedCount} processed events`);
     }
 
     return removedCount;
@@ -208,7 +197,6 @@ class RfidBufferService {
    */
   public clearAllEvents(): void {
     this.rfidBuffer.clear();
-    console.log(`[RFID Buffer] All events cleared`);
   }
 
   /**
@@ -230,8 +218,6 @@ class RfidBufferService {
     for (const event of toRemove) {
       this.rfidBuffer.delete(event.id);
     }
-    
-    console.log(`[RFID Buffer] Cleaned up ${toRemove.length} oldest events due to buffer size limit`);
   }
 
   /**

@@ -25,7 +25,7 @@ interface IEventRequest extends express.Request {
       license_plate: string;
       timestamp: Date;
       gateId: string;
-      imageData?: string;
+      imageUrl?: string;
     };
   };
 }
@@ -163,12 +163,22 @@ eventRouter.post('/', gateStaffAuth, async (req: IEventRequest, res: express.Res
     }
 
 
+    // Resolve timestamp from provided event data (prefer earliest of provided timestamps)
+    let resolvedTimestamp: Date = new Date();
+    if (rfidEvent?.timestamp && cameraEvent?.timestamp) {
+      resolvedTimestamp = new Date(Math.min(new Date(rfidEvent.timestamp).getTime(), new Date(cameraEvent.timestamp).getTime()));
+    } else if (rfidEvent?.timestamp) {
+      resolvedTimestamp = new Date(rfidEvent.timestamp);
+    } else if (cameraEvent?.timestamp) {
+      resolvedTimestamp = new Date(cameraEvent.timestamp);
+    }
+
     // Create event data object
     const eventData: any = {
       eventType,
       license_plate: license_plate.toUpperCase(),
       gateId,
-      timestamp: new Date()
+      timestamp: resolvedTimestamp
     };
 
     // Add optional fields
@@ -199,20 +209,20 @@ eventRouter.post('/', gateStaffAuth, async (req: IEventRequest, res: express.Res
 eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { status, failureReason } = req.body;
+    const { status, failureReason, imageUrl, cameraEvent } = req.body as any;
 
     if (!id) {
       badRequest(res, 'Event ID is required');
       return;
     }
 
-    if (!status) {
-      badRequest(res, 'Status is required');
+    if (!status && !imageUrl && !(cameraEvent && cameraEvent.imageUrl)) {
+      badRequest(res, 'Either status or imageUrl is required');
       return;
     }
 
     // Validate status enum
-    if (!Object.values(EventStatus).includes(status)) {
+    if (status && !Object.values(EventStatus).includes(status)) {
       badRequest(res, `Invalid status. Must be one of: ${Object.values(EventStatus).join(', ')}`);
       return;
     }
@@ -232,6 +242,12 @@ eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: 
 
     if ((status === EventStatus.ETC_ERROR || status === EventStatus.REJECTED) && failureReason) {
       updateData.failureReason = failureReason;
+    }
+
+    // Optionally update cameraEvent.imageUrl later
+    const newImageUrl: string | undefined = cameraEvent?.imageUrl ?? imageUrl;
+    if (newImageUrl && typeof newImageUrl === 'string') {
+      updateData['cameraEvent.imageUrl'] = newImageUrl;
     }
 
     // Update the event

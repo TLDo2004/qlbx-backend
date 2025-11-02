@@ -3,6 +3,7 @@ import { internalError, badRequest } from '../../utils';
 import { gateStaffAuth } from '../../middleware/index';
 import { spawn } from 'child_process';
 import CameraBufferService from '../../services/cameraBufferService';
+import { Event } from '../../models';
 
 const anprRouter = express.Router();
 
@@ -190,6 +191,26 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
       // Auto-reconnectable curl process
       let stopped = false;
       let currentCurl: any = null;
+      // Track pending buffer events per stream (single-image mode)
+      let pendingEventIds: string[] = [];
+      const eventStates: Map<string, { receivedAny: boolean; readyTimer?: any }> = new Map();
+
+      const markReadyFor = (eventId: string) => {
+        const cameraBufferService = CameraBufferService.getInstance();
+        cameraBufferService.markImagesReady(eventId);
+        // shift only if this event is at head of queue
+        if (pendingEventIds.length > 0 && pendingEventIds[0] === eventId) {
+          pendingEventIds.shift();
+        } else {
+          // remove if exists elsewhere (safety)
+          pendingEventIds = pendingEventIds.filter(id => id !== eventId);
+        }
+        const st = eventStates.get(eventId);
+        if (st && st.readyTimer) {
+          clearTimeout(st.readyTimer);
+        }
+        eventStates.delete(eventId);
+      };
       
       const startCurl = () => {
         if (stopped || res.destroyed) {
@@ -208,10 +229,10 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
           isapiUrl
         ]);
         currentCurl = curl;
-        console.log(`🚀 Starting curl process for: ${isapiUrl}`);
-        console.log(`🔐 Using credentials: ${username}:${password}`);
-        console.log(`📋 Curl command: curl --digest -u ${username}:${password} --no-buffer --silent --connect-timeout 10 --max-time 0 ${isapiUrl}`);
-        console.log(`✅ Curl process spawned with PID: ${curl.pid}`);
+        console.log(`Starting curl process for: ${isapiUrl}`);
+        console.log(`Using credentials: ${username}:${password}`);
+        console.log(`Curl command: curl --digest -u ${username}:${password} --no-buffer --silent --connect-timeout 10 --max-time 0 ${isapiUrl}`);
+        console.log(`Curl process spawned with PID: ${curl.pid}`);
 
         let buffer = Buffer.alloc(0);
         let boundary: string | null = null;
@@ -219,11 +240,10 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
         // Handle curl stdout data
         curl.stdout.on("data", (chunk: Buffer) => {
           if (res.destroyed) {
-            console.log('🚫 curl stdout blocked: res.destroyed=', res.destroyed);
+            console.log('url stdout blocked: res.destroyed=', res.destroyed);
             return;
           }
           
-          console.log(`📥 Curl stdout data received: ${chunk.length} bytes`);
           buffer = Buffer.concat([buffer, chunk]);
 
           // Detect boundary (only need to do this once)
@@ -266,8 +286,6 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
                   const filenameMatch = headers.match(/filename="([^"]+)"/);
                   const contentType = typeMatch ? typeMatch[1] : null;
                   const filename = filenameMatch ? filenameMatch[1] : null;
-                  
-                  console.log(`📋 Content-Type: ${contentType}, Filename: ${filename}, Body size: ${body.length} bytes`);
 
               if (contentType === "application/xml" || contentType === "text/xml") {
                 // Send XML data as event (original logic)
@@ -283,10 +301,8 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
                 // Extract license plate and add to buffer
                 try {
                   const xmlData = body.toString();
-                  console.log('📄 XML Data received:', xmlData.substring(0, 200) + '...');
                   
                   const licensePlate = extractLicensePlateFromXML(xmlData);
-                  console.log('🔍 Extracted license plate:', licensePlate);
                   
                   if (licensePlate) {
                     const cameraBufferService = CameraBufferService.getInstance();
@@ -296,10 +312,20 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
                       gateId: gateId,
                       imageData: null
                     });
-                    
-                    console.log(`🎯 Camera event added to buffer: ${eventId} (License: ${licensePlate}, Gate: ${gateId})`);
+                    pendingEventIds.push(eventId);
+                    // initialize state and fallback timer (single-image: 2000ms)
+                    const state = { receivedAny: false, readyTimer: undefined as any };
+                    state.readyTimer = setTimeout(() => {
+                      const st = eventStates.get(eventId);
+                      if (!st) return;
+                      // Only mark ready if at least one image was received
+                      if (st.receivedAny) {
+                        markReadyFor(eventId);
+                      }
+                    }, 2000);
+                    eventStates.set(eventId, state);
                   } else {
-                    console.log('❌ No license plate found in XML data');
+                    console.log('No license plate found in XML data');
                   }
                 } catch (bufferError) {
                   console.error('Error processing camera event for buffer:', bufferError);
@@ -307,7 +333,7 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
                 }
               } else if (contentType === "image/jpeg" || contentType === "image/jpg") {
                 // Send image data
-                console.log(`🖼️ Image received: ${filename}, size: ${body.length} bytes`);
+                console.log(`Image received: ${filename}, size: ${body.length} bytes`);
                 res.write(`data: ${JSON.stringify({
                   type: 'image',
                   timestamp: new Date().toISOString(),
@@ -317,6 +343,83 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
                   contentType: contentType,
                   size: body.length
                 })}\n\n`);
+
+                // Upload to Cloudinary and append URL to the most suitable pending event
+                if (pendingEventIds.length > 0) {
+                  // Map by filename timestamp to closest pending event timestamp
+                  const parseFilenameToEpochMs = (name: string | null): number | null => {
+                    if (!name) return null;
+                    const m = name.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{3,6})/);
+                    if (!m) return null;
+                    const [_, y, mo, d, h, mi, s, frac] = m as any;
+                    const ms = parseInt((frac as string).substring(0, 3));
+                    return Date.UTC(parseInt(y), parseInt(mo) - 1, parseInt(d), parseInt(h), parseInt(mi), parseInt(s), ms);
+                  };
+
+                  const imageEpoch = parseFilenameToEpochMs(filename);
+                  let currentEventId = pendingEventIds[0];
+                  if (imageEpoch) {
+                    const cameraBufferService = CameraBufferService.getInstance();
+                    let bestId = currentEventId;
+                    let bestDiff = Number.MAX_SAFE_INTEGER;
+                    for (const id of pendingEventIds) {
+                      const ev = cameraBufferService.getEventById(id);
+                      if (!ev) continue;
+                      const diff = Math.abs(ev.timestamp.getTime() - imageEpoch);
+                      if (diff < bestDiff) {
+                        bestDiff = diff;
+                        bestId = id;
+                      }
+                    }
+                    currentEventId = bestId;
+                  }
+
+                  (async () => {
+                    try {
+                      const { uploadBufferToCloudinary } = await import('../../utils');
+                      const url = await uploadBufferToCloudinary(body, { folder: 'qlbx/events', resource_type: 'image' });
+                      const cameraBufferService = CameraBufferService.getInstance();
+                      cameraBufferService.addImageUrlToEvent(currentEventId, url);
+                      // If this buffer event already created a persisted Event, update DB
+                      try {
+                        const persistedId = cameraBufferService.getPersistedEventId(currentEventId);
+                        if (persistedId) {
+                          const baseUrl = `http://localhost:${process.env.PORT || 3333}`;
+                          const resp = await fetch(`${baseUrl}/event/${persistedId}/status`, {
+                            method: 'PUT',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'x-internal-api-key': process.env.INTERNAL_API_KEY || ''
+                            },
+                            body: JSON.stringify({ imageUrl: url })
+                          });
+                          if (!resp.ok) {
+                            // Fallback to direct DB update if PUT blocked by auth or other issue
+                            await Event.findByIdAndUpdate(persistedId, {
+                              $set: { 'cameraEvent.imageUrl': url, updatedAt: new Date() }
+                            }, { new: false });
+                          }
+                        }
+                      } catch (e) {
+                        console.error('Failed to update persisted Event (PUT/DB):', e);
+                      }
+                      const stNow = eventStates.get(currentEventId);
+                      if (stNow) stNow.receivedAny = true;
+
+                      // Single-image mode: mark ready immediately after first upload
+                      markReadyFor(currentEventId);
+
+                      // Also notify client with URL
+                      res.write(`data: ${JSON.stringify({
+                        type: 'image_url',
+                        timestamp: new Date().toISOString(),
+                        url
+                      })}\n\n`);
+                    } catch (uploadErr) {
+                      console.error('Cloudinary upload failed:', uploadErr);
+                    }
+                  })();
+                }
               } else if (contentType) {
                 // Send other content types
                 res.write(`data: ${JSON.stringify({
@@ -419,7 +522,6 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
       // Keep alive mechanism
       const keepAliveInterval = setInterval(() => {
         if (!res.destroyed) {
-          console.log('💓 Sending keepalive...');
           res.write('data: {"type": "keepalive", "timestamp": "' + new Date().toISOString() + '"}\n\n');
         } else {
           console.log('🚫 Keepalive stopped: res.destroyed=', res.destroyed);

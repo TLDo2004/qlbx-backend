@@ -16,7 +16,7 @@ class EventMergerService {
   private mergeInterval: NodeJS.Timeout | null = null;
   private config = {
     mergeInterval: 5000, // Check for merges every 5 seconds
-    deltaTimeThreshold: 5000, // 5 seconds max time difference
+    deltaTimeThreshold: 8000, // 8 seconds max time difference (tolerate network/device latency)
     maxRetries: 3, // Max retries for failed merges
     retryDelay: 2000 // 2 seconds delay between retries
   };
@@ -186,9 +186,6 @@ class EventMergerService {
         cameraBufferService.markCameraEventAsProcessed(bestMatch.id);
         
         console.log(`Merged RFID event ${rfidEvent.rfid_etc} with Camera event ${bestMatch.license_plate}`);
-      } else {
-        // No camera match found, leave it for next iteration
-        console.log(`No match found for RFID event ${rfidEvent.rfid_etc} - ${rfidEvent.license_plate}, keeping for next iteration`);
       }
     } catch (error) {
       console.error(`Error processing RFID event ${rfidEvent.rfid_etc}:`, error);
@@ -209,8 +206,31 @@ class EventMergerService {
         return;
       }
 
-      // Find matching RFID events
-      const matchingRfidEvents = this.findMatchingRfidEvents(cameraEvent, rfidEvents);
+      // Do not block merging by image readiness; images can arrive later
+
+      // Find matching RFID events (tolerate missing rfid license by lookup)
+      const candidateRfidEvents = rfidEvents.filter((rfidEvent) => {
+        if (rfidEvent.processed) return false;
+        if (rfidEvent.gateId !== cameraEvent.gateId) return false;
+        const timeDiff = Math.abs(cameraEvent.timestamp.getTime() - rfidEvent.timestamp.getTime());
+        return timeDiff <= this.config.deltaTimeThreshold;
+      });
+
+      const matchingRfidEvents: IRfidEvent[] = [];
+      for (const rfidEvent of candidateRfidEvents) {
+        let rfidLicense = rfidEvent.license_plate;
+        if (!rfidLicense) {
+          try {
+            const vehicle = await this.lookupVehicleByRfid(rfidEvent.rfid_etc);
+            rfidLicense = vehicle?.license_plate;
+          } catch (e) {
+            // ignore lookup error
+          }
+        }
+        if (rfidLicense && rfidLicense === cameraEvent.license_plate) {
+          matchingRfidEvents.push(rfidEvent);
+        }
+      }
 
       if (matchingRfidEvents.length > 0) {
         // Use the best match (closest timestamp)
@@ -226,9 +246,6 @@ class EventMergerService {
         cameraBufferService.markCameraEventAsProcessed(cameraEvent.id);
         
         console.log(`Merged Camera event ${cameraEvent.license_plate} with RFID event ${bestMatch.license_plate}`);
-      } else {
-        // No RFID match found, leave it for next iteration
-        console.log(`No match found for Camera event ${cameraEvent.license_plate}, keeping for next iteration`);
       }
     } catch (error) {
       console.error(`Error processing Camera event ${cameraEvent.license_plate}:`, error);
@@ -515,34 +532,7 @@ class EventMergerService {
     }
   }
 
-  /**
-   * Find matching RFID events for a Camera event
-   */
-  private findMatchingRfidEvents(cameraEvent: ICameraEvent, rfidEvents: IRfidEvent[]): IRfidEvent[] {
-    return rfidEvents.filter(rfidEvent => {
-      // Check if RFID event is not processed
-      if (rfidEvent.processed) return false;
-
-      // Check if same gate
-      if (cameraEvent.gateId !== rfidEvent.gateId) return false;
-
-      // Check if rfid has license plate
-      if (!rfidEvent.license_plate) return false;
-
-      // Check if license plate matches
-      const formattedRfidPlate = rfidEvent.license_plate;
-      const formattedCameraPlate = cameraEvent.license_plate;
-      if (formattedRfidPlate !== formattedCameraPlate) {
-        return false;
-      }
-
-      // Check time difference
-      const timeDiff = Math.abs(cameraEvent.timestamp.getTime() - rfidEvent.timestamp.getTime());
-      if (timeDiff > this.config.deltaTimeThreshold) return false;
-
-      return true;
-    });
-  }
+  // Matching RFID events for a Camera event is now inlined in processCameraEventFIFO to support RFID license lookup
 
   /**
    * Select the best matching RFID event
@@ -564,6 +554,8 @@ class EventMergerService {
     return cameraEvents.filter(cameraEvent => {
       // Check if camera event is not processed
       if (cameraEvent.processed) return false;
+
+      // Do not require imagesReady; image may arrive later
 
       // Check if same gate
       if (rfidEvent.gateId !== cameraEvent.gateId) return false;
@@ -610,28 +602,39 @@ class EventMergerService {
         cameraEvent
       );
 
+      const cameraEventData: any = {
+        license_plate: cameraEvent.license_plate,
+        timestamp: cameraEvent.timestamp,
+        gateId: cameraEvent.gateId
+      };
+      if (cameraEvent.imageUrl) {
+        cameraEventData.imageUrl = cameraEvent.imageUrl;
+      }
+
+      const mergedTimestamp = new Date(Math.min(rfidEvent.timestamp.getTime(), cameraEvent.timestamp.getTime()));
+
       const eventData = {
         eventType: EventType.MERGED,
         status: status,
         license_plate: license_plate || cameraEvent.license_plate,
         vehicle_id: vehicle_id,
         gateId: rfidEvent.gateId,
-        timestamp: new Date(), // Current time
+        timestamp: mergedTimestamp,
         rfidEvent: {
           rfid_etc: rfidEvent.rfid_etc,
           timestamp: rfidEvent.timestamp,
           gateId: rfidEvent.gateId
         },
-        cameraEvent: {
-          license_plate: cameraEvent.license_plate,
-          timestamp: cameraEvent.timestamp,
-          gateId: cameraEvent.gateId,
-          imageData: cameraEvent.imageData
-        },
+        cameraEvent: cameraEventData,
         failureReason: failureReason
       };
 
-      await Event.create(eventData);
+      const created = await Event.create(eventData);
+      // Link camera buffer event to persisted Event id for later image update
+      try {
+        const cameraBufferService = CameraBufferService.getInstance();
+        cameraBufferService.setPersistedEventId(cameraEvent.id, created._id.toString());
+      } catch (_) {}
       console.log(`Created merged event with status: ${status}`);
     } catch (error) {
       console.error('Error creating merged event:', error);
@@ -657,7 +660,7 @@ class EventMergerService {
         license_plate: license_plate || rfidEvent.license_plate || 'UNKNOWN',
         vehicle_id: vehicle_id,
         gateId: rfidEvent.gateId,
-        timestamp: new Date(),
+        timestamp: rfidEvent.timestamp,
         rfidEvent: {
           rfid_etc: rfidEvent.rfid_etc,
           timestamp: rfidEvent.timestamp,
@@ -686,23 +689,31 @@ class EventMergerService {
         cameraEvent
       );
 
+      const cameraEventData: any = {
+        license_plate: cameraEvent.license_plate,
+        timestamp: cameraEvent.timestamp,
+        gateId: cameraEvent.gateId
+      };
+      if (cameraEvent.imageUrl) {
+        cameraEventData.imageUrl = cameraEvent.imageUrl;
+      }
+
       const eventData = {
         eventType: EventType.CAMERA_ONLY,
         status: status,
         license_plate: cameraEvent.license_plate,
         vehicle_id: vehicle_id,
         gateId: cameraEvent.gateId,
-        timestamp: new Date(),
-        cameraEvent: {
-          license_plate: cameraEvent.license_plate,
-          timestamp: cameraEvent.timestamp,
-          gateId: cameraEvent.gateId,
-          imageData: cameraEvent.imageData
-        },
+        timestamp: cameraEvent.timestamp,
+        cameraEvent: cameraEventData,
         failureReason: failureReason
       };
 
-      await Event.create(eventData);
+      const created = await Event.create(eventData);
+      try {
+        const cameraBufferService = CameraBufferService.getInstance();
+        cameraBufferService.setPersistedEventId(cameraEvent.id, created._id.toString());
+      } catch (_) {}
       console.log(`Created Camera-only event with status: ${status}`);
     } catch (error) {
       console.error('Error creating Camera-only event:', error);

@@ -27,7 +27,7 @@ export interface ICameraEventData {
     license_plate: string;
     timestamp: Date;
     gateId: string;
-    imageData?: string; // base64 image data
+    imageUrl?: string; // URL to image stored in cloud (e.g., Cloudinary)
 }
 
 // Interface for Event document
@@ -119,7 +119,7 @@ const EventSchema = new Schema<IEvent>({
             type: String,
             required: false
         },
-        imageData: {
+        imageUrl: {
             type: String,
             required: false
         }

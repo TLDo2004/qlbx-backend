@@ -293,11 +293,29 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
     }
 
     const cameraBufferService = CameraBufferService.getInstance();
+
+    // Normalize imageData to array of base64 strings (max 3)
+    const base64String: string | undefined = Array.isArray(imageData)
+      ? (imageData[0] || undefined)
+      : (typeof imageData === 'string' && imageData ? imageData : undefined);
+
+    let imageUrl: string | undefined = undefined;
+
+    if (base64String) {
+      // Convert base64 string to buffer and upload to Cloudinary
+      const { uploadBufferToCloudinary } = await import('../utils');
+      const commaIdx = base64String.indexOf(',');
+      const pureBase64 = commaIdx !== -1 ? base64String.substring(commaIdx + 1) : base64String;
+      const buffer = Buffer.from(pureBase64, 'base64');
+      imageUrl = await uploadBufferToCloudinary(buffer, { folder: 'qlbx/events', resource_type: 'image' });
+    }
+
     const eventId = cameraBufferService.addCameraEvent({
       timestamp: new Date(),
       license_plate,
       gateId,
-      imageData
+      imageData: undefined,
+      imageUrl
     });
     
     res.json({
@@ -307,7 +325,7 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
         eventId,
         license_plate,
         gateId,
-        imageData: imageData ? 'provided' : 'not provided'
+        imageUrl: imageUrl || 'not provided'
       }
     });
   } catch (error) {

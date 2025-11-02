@@ -62,3 +62,6 @@ export const created = (res: Response, data: any = null, message: string = 'Crea
     data: data
   });
 };
+
+export { cloudinary, storage as cloudinaryStorage } from './cloudinary';
+export { uploadBufferToCloudinary, uploadMultipleBuffersToCloudinary } from './cloudinary';

@@ -118,8 +118,6 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
                     // New EPC detected - reset buffer flag and add to buffer
                     lastEmittedEpc = tag;
                     currentEpcAddedToBuffer = false;
-                    
-                    console.log(`🆕 New RFID EPC detected: ${tag} (Gate: ${gateId})`);
                   }
                   
                   // Add to buffer only once per EPC
@@ -133,7 +131,6 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
                       });
                       
                       currentEpcAddedToBuffer = true;
-                      console.log(`✅ RFID event added to buffer: ${eventId} (EPC: ${tag}, Gate: ${gateId})`);
                       
                       // Send to client
                       res.write(`data: ${JSON.stringify({ 
