@@ -4,8 +4,8 @@
  */
 
 import express from 'express';
-import RfidBufferService from '../services/rfidBufferService';
-import CameraBufferService from '../services/cameraBufferService';
+import RfidBufferService from '../services/_rfidBufferService';
+import CameraBufferService from '../services/_cameraBufferService';
 import { gateStaffAuth } from '../middleware';
 import { internalError, badRequest } from '../utils';
 

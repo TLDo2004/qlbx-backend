@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import EventMergerService from '../services/eventMergerService';
+import EventMergerService from '../services/_eventMergerService';
 import { gateStaffAuth } from '../middleware';
 import { internalError, badRequest, success } from '../utils';
 

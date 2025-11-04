@@ -3,7 +3,7 @@ import { gateStaffAuth } from '../../middleware';
 import { badRequest, internalError } from '../../utils';
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
-import RfidBufferService from '../../services/rfidBufferService';
+import RfidBufferService from '../../services/_rfidBufferService';
 
 const rfidRouter = express.Router();
 
