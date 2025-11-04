@@ -8,13 +8,14 @@ import { ICameraEvent, IBufferConfig, IBufferStatus } from '../types/eventBuffer
 class CameraBufferService {
   private static instance: CameraBufferService;
   private cameraBuffer: Map<string, ICameraEvent> = new Map();
+  private persistedEventMap: Map<string, string> = new Map();
   private config: IBufferConfig;
   private lastCleanup: Date = new Date();
 
   private constructor() {
     // Default configuration
     this.config = {
-      deltaTimeThreshold: 10000, // 10 seconds
+      deltaTimeThreshold: 5000, // 5 seconds
       maxBufferSize: 1000, // Maximum 1000 events per buffer
       cleanupInterval: 30000 // Cleanup every 30 seconds
     };
@@ -42,6 +43,7 @@ class CameraBufferService {
     const cameraEvent: ICameraEvent = {
       id: eventId,
       ...eventData,
+      imagesReady: eventData.imagesReady ?? false,
       processed: false
     };
 
@@ -53,9 +55,19 @@ class CameraBufferService {
       this.cleanupOldestEvents();
     }
 
-    console.log(`[Camera Buffer] Added event: ${eventId}, Gate: ${cameraEvent.gateId}, License: ${cameraEvent.license_plate}`);
+    console.log(`[Camera Buffer] Gate: ${cameraEvent.gateId}, License: ${cameraEvent.license_plate}`);
     
     return eventId;
+  }
+
+  /**
+   * Mark image collection as ready for a specific event
+   */
+  public markImagesReady(eventId: string): boolean {
+    const event = this.cameraBuffer.get(eventId);
+    if (!event) return false;
+    event.imagesReady = true;
+    return true;
   }
 
   /**
@@ -111,7 +123,6 @@ class CameraBufferService {
     const event = this.cameraBuffer.get(eventId);
     if (event) {
       event.processed = true;
-      console.log(`[Camera Buffer] Marked event as processed: ${eventId}`);
       return true;
     }
     return false;
@@ -131,11 +142,17 @@ class CameraBufferService {
   }
 
   /**
+   * Get a camera event by id
+   */
+  public getEventById(eventId: string): ICameraEvent | undefined {
+    return this.cameraBuffer.get(eventId);
+  }
+
+  /**
    * Update configuration
    */
   public updateConfig(newConfig: Partial<IBufferConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    console.log(`[Camera Buffer] Configuration updated:`, this.config);
   }
 
   /**
@@ -143,7 +160,7 @@ class CameraBufferService {
    */
   public cleanupExpiredEvents(): number {
     const now = Date.now();
-    const maxAge = this.config.deltaTimeThreshold * 2; // 2x threshold to ensure no missed events
+    const maxAge = 15000; // 15 seconds - fixed expired time
     let cleanedCount = 0;
 
     for (const [id, event] of this.cameraBuffer) {
@@ -155,12 +172,83 @@ class CameraBufferService {
     }
 
     this.lastCleanup = new Date();
-    
-    if (cleanedCount > 0) {
-      console.log(`[Camera Buffer] Cleaned up ${cleanedCount} expired events`);
-    }
 
     return cleanedCount;
+  }
+
+  /**
+   * Remove specific event from buffer
+   */
+  public removeCameraEvent(eventId: string): boolean {
+    const existed = this.cameraBuffer.has(eventId);
+    if (existed) {
+      this.cameraBuffer.delete(eventId);
+    }
+    return existed;
+  }
+
+  /**
+   * Remove only processed events (already saved to database)
+   */
+  public removeProcessedEvents(): number {
+    let removedCount = 0;
+
+    for (const [id, event] of this.cameraBuffer) {
+      if (event.processed) {
+        this.cameraBuffer.delete(id);
+        removedCount++;
+      }
+    }
+
+    return removedCount;
+  }
+
+  /**
+   * Remove expired or processed events
+   */
+  public removeExpiredOrProcessedEvents(): number {
+    let removedCount = 0;
+    const now = Date.now();
+    const maxAge = 15000; // 15 seconds
+
+    for (const [id, event] of this.cameraBuffer) {
+      const eventAge = now - event.timestamp.getTime();
+      if (eventAge > maxAge || event.processed) {
+        this.cameraBuffer.delete(id);
+        removedCount++;
+      }
+    }
+
+    if (removedCount > 0) {
+      console.log(`[Camera Buffer] Removed ${removedCount} expired/processed events`);
+    }
+
+    return removedCount;
+  }
+
+  /**
+   * Set single image URL for a specific camera event
+   */
+  public addImageUrlToEvent(eventId: string, url: string): boolean {
+    const event = this.cameraBuffer.get(eventId);
+    if (!event) return false;
+    event.imageUrl = url;
+    return true;
+  }
+
+  /**
+   * Link a camera buffer event to a persisted Event _id for later DB updates
+   */
+  public setPersistedEventId(bufferEventId: string, persistedEventId: string): void {
+    this.persistedEventMap.set(bufferEventId, persistedEventId);
+  }
+
+  public getPersistedEventId(bufferEventId: string): string | undefined {
+    return this.persistedEventMap.get(bufferEventId);
+  }
+
+  public clearPersistedEventId(bufferEventId: string): void {
+    this.persistedEventMap.delete(bufferEventId);
   }
 
   /**
@@ -168,7 +256,6 @@ class CameraBufferService {
    */
   public clearAllEvents(): void {
     this.cameraBuffer.clear();
-    console.log(`[Camera Buffer] All events cleared`);
   }
 
   /**
@@ -190,8 +277,6 @@ class CameraBufferService {
     for (const event of toRemove) {
       this.cameraBuffer.delete(event.id);
     }
-    
-    console.log(`[Camera Buffer] Cleaned up ${toRemove.length} oldest events due to buffer size limit`);
   }
 
   /**

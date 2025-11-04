@@ -2,7 +2,7 @@ import express from 'express';
 import { internalError, badRequest } from '../../utils';
 import { gateStaffAuth } from '../../middleware/index';
 import { spawn } from 'child_process';
-import CameraBufferService from '../../services/cameraBufferService';
+import CameraBufferService from '../../services/_cameraBufferService';
 import { Event } from '../../models';
 
 const anprRouter = express.Router();

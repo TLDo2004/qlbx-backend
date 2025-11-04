@@ -14,7 +14,7 @@ class RfidBufferService {
   private constructor() {
     // Default configuration
     this.config = {
-      deltaTimeThreshold: 10000, // 10 seconds
+      deltaTimeThreshold: 5000, // 5 seconds
       maxBufferSize: 1000, // Maximum 1000 events per buffer
       cleanupInterval: 30000 // Cleanup every 30 seconds
     };
@@ -53,7 +53,7 @@ class RfidBufferService {
       this.cleanupOldestEvents();
     }
 
-    console.log(`[RFID Buffer] Added event: ${eventId}, Gate: ${rfidEvent.gateId}, RFID: ${rfidEvent.rfid_etc}`);
+    console.log(`[RFID Buffer] Gate: ${rfidEvent.gateId}, RFID: ${rfidEvent.rfid_etc}`);
     
     return eventId;
   }
@@ -96,7 +96,6 @@ class RfidBufferService {
     const event = this.rfidBuffer.get(eventId);
     if (event) {
       event.processed = true;
-      console.log(`[RFID Buffer] Marked event as processed: ${eventId}`);
       return true;
     }
     return false;
@@ -120,7 +119,6 @@ class RfidBufferService {
    */
   public updateConfig(newConfig: Partial<IBufferConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    console.log(`[RFID Buffer] Configuration updated:`, this.config);
   }
 
   /**
@@ -128,7 +126,7 @@ class RfidBufferService {
    */
   public cleanupExpiredEvents(): number {
     const now = Date.now();
-    const maxAge = this.config.deltaTimeThreshold * 2; // 2x threshold to ensure no missed events
+    const maxAge = 15000; // 15 seconds - fixed expired time
     let cleanedCount = 0;
 
     for (const [id, event] of this.rfidBuffer) {
@@ -140,12 +138,58 @@ class RfidBufferService {
     }
 
     this.lastCleanup = new Date();
-    
-    if (cleanedCount > 0) {
-      console.log(`[RFID Buffer] Cleaned up ${cleanedCount} expired events`);
-    }
 
     return cleanedCount;
+  }
+
+  /**
+   * Remove specific event from buffer
+   */
+  public removeRfidEvent(eventId: string): boolean {
+    const existed = this.rfidBuffer.has(eventId);
+    if (existed) {
+      this.rfidBuffer.delete(eventId);
+    }
+    return existed;
+  }
+
+  /**
+   * Remove only processed events (already saved to database)
+   */
+  public removeProcessedEvents(): number {
+    let removedCount = 0;
+
+    for (const [id, event] of this.rfidBuffer) {
+      if (event.processed) {
+        this.rfidBuffer.delete(id);
+        removedCount++;
+      }
+    }
+
+    return removedCount;
+  }
+
+  /**
+   * Remove expired or processed events
+   */
+  public removeExpiredOrProcessedEvents(): number {
+    let removedCount = 0;
+    const now = Date.now();
+    const maxAge = 15000; // 15 seconds
+
+    for (const [id, event] of this.rfidBuffer) {
+      const eventAge = now - event.timestamp.getTime();
+      if (eventAge > maxAge || event.processed) {
+        this.rfidBuffer.delete(id);
+        removedCount++;
+      }
+    }
+
+    if (removedCount > 0) {
+      console.log(`[RFID Buffer] Removed ${removedCount} expired/processed events`);
+    }
+
+    return removedCount;
   }
 
   /**
@@ -153,7 +197,6 @@ class RfidBufferService {
    */
   public clearAllEvents(): void {
     this.rfidBuffer.clear();
-    console.log(`[RFID Buffer] All events cleared`);
   }
 
   /**
@@ -175,8 +218,6 @@ class RfidBufferService {
     for (const event of toRemove) {
       this.rfidBuffer.delete(event.id);
     }
-    
-    console.log(`[RFID Buffer] Cleaned up ${toRemove.length} oldest events due to buffer size limit`);
   }
 
   /**
