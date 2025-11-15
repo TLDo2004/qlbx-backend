@@ -19,7 +19,7 @@ gateStaffRouter.get('/me', async (req: AuthenticatedRequest, res: express.Respon
         if (!uid) {
             res.status(401).json({
                 success: false,
-                error: 'Unauthorized: missing user context'
+                error: 'Không được phép: thiếu thông tin người dùng'
             });
             return;
         }
@@ -29,7 +29,7 @@ gateStaffRouter.get('/me', async (req: AuthenticatedRequest, res: express.Respon
         if (!gateStaff) {
             res.status(404).json({
                 success: false,
-                error: 'Gate staff not found'
+                error: 'Không tìm thấy nhân viên cổng'
             });
             return;
         }
@@ -52,7 +52,7 @@ gateStaffRouter.get('/me', async (req: AuthenticatedRequest, res: express.Respon
         });
     } catch (error) {
         console.error('Error fetching current gate staff:', error);
-        internalError(res, 'Failed to fetch current gate staff');
+        internalError(res, 'Không thể lấy thông tin nhân viên cổng hiện tại');
     }
 });
 

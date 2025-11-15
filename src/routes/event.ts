@@ -45,12 +45,12 @@ eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Re
 
     // Validate pagination parameters
     if (page < 1) {
-      badRequest(res, 'Page number must be greater than 0');
+      badRequest(res, 'Số trang phải lớn hơn 0');
       return;
     }
 
     if (limit < 1 || limit > 100) {
-      badRequest(res, 'Limit must be between 1 and 100');
+      badRequest(res, 'Giới hạn phải từ 1 đến 100');
       return;
     }
 
@@ -107,10 +107,10 @@ eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Re
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1
       }
-    }, 'Events retrieved successfully');
+    }, 'Lấy danh sách sự kiện thành công');
   } catch (error: any) {
     console.error('Error fetching events:', error);
-    internalError(res, 'Failed to fetch events');
+    internalError(res, 'Không thể lấy danh sách sự kiện');
   }
 });
 
@@ -120,7 +120,7 @@ eventRouter.get('/:id', gateStaffAuth, async (req: express.Request, res: express
     const { id } = req.params;
 
     if (!id) {
-      badRequest(res, 'Event ID is required');
+      badRequest(res, 'ID sự kiện là bắt buộc');
       return;
     }
 
@@ -128,14 +128,14 @@ eventRouter.get('/:id', gateStaffAuth, async (req: express.Request, res: express
       .populate('vehicle_id', 'license_plate vehicle_type company rfid_etc gate');
 
     if (!event) {
-      notFound(res, 'Event not found');
+      notFound(res, 'Không tìm thấy sự kiện');
       return;
     }
 
-    success(res, event, 'Event retrieved successfully');
+    success(res, event, 'Lấy thông tin sự kiện thành công');
   } catch (error: any) {
     console.error('Error fetching event:', error);
-    internalError(res, 'Failed to fetch event');
+    internalError(res, 'Không thể lấy thông tin sự kiện');
   }
 });
 
@@ -146,19 +146,19 @@ eventRouter.post('/', gateStaffAuth, async (req: IEventRequest, res: express.Res
 
     // Validate required fields
     if (!eventType || !license_plate || !gateId) {
-      badRequest(res, 'Missing required fields: eventType, license_plate, and gateId are required');
+      badRequest(res, 'Thiếu các trường bắt buộc: eventType, license_plate và gateId là bắt buộc');
       return;
     }
 
     // Validate eventType enum
     if (!Object.values(EventType).includes(eventType)) {
-      badRequest(res, `Invalid eventType. Must be one of: ${Object.values(EventType).join(', ')}`);
+      badRequest(res, `Loại sự kiện không hợp lệ. Phải là một trong: ${Object.values(EventType).join(', ')}`);
       return;
     }
 
     // Validate that at least one event data is provided
     if (!rfidEvent && !cameraEvent) {
-      badRequest(res, 'At least one of rfidEvent or cameraEvent must be provided');
+      badRequest(res, 'Phải cung cấp ít nhất một trong rfidEvent hoặc cameraEvent');
       return;
     }
 
@@ -191,17 +191,17 @@ eventRouter.post('/', gateStaffAuth, async (req: IEventRequest, res: express.Res
     // Populate vehicle info
     await event.populate('vehicle_id', 'license_plate vehicle_type company rfid_etc gate');
 
-    created(res, event, 'Event created successfully');
+    created(res, event, 'Tạo sự kiện thành công');
   } catch (error: any) {
     console.error('Error creating event:', error);
 
     // Handle validation errors
     if (error.name === 'ValidationError') {
-      badRequest(res, 'Validation error');
+      badRequest(res, 'Lỗi xác thực dữ liệu');
       return;
     }
 
-    internalError(res, 'Failed to create event');
+    internalError(res, 'Không thể tạo sự kiện');
   }
 });
 
@@ -212,25 +212,25 @@ eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: 
     const { status, failureReason, imageUrl, cameraEvent } = req.body as any;
 
     if (!id) {
-      badRequest(res, 'Event ID is required');
+      badRequest(res, 'ID sự kiện là bắt buộc');
       return;
     }
 
     if (!status && !imageUrl && !(cameraEvent && cameraEvent.imageUrl)) {
-      badRequest(res, 'Either status or imageUrl is required');
+      badRequest(res, 'Phải cung cấp status hoặc imageUrl');
       return;
     }
 
     // Validate status enum
     if (status && !Object.values(EventStatus).includes(status)) {
-      badRequest(res, `Invalid status. Must be one of: ${Object.values(EventStatus).join(', ')}`);
+      badRequest(res, `Trạng thái không hợp lệ. Phải là một trong: ${Object.values(EventStatus).join(', ')}`);
       return;
     }
 
     // Find the event
     const event = await Event.findById(id);
     if (!event) {
-      notFound(res, 'Event not found');
+      notFound(res, 'Không tìm thấy sự kiện');
       return;
     }
 
@@ -257,10 +257,10 @@ eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: 
       { new: true, runValidators: true }
     ).populate('vehicle_id', 'license_plate vehicle_type company rfid_etc gate');
 
-    success(res, updatedEvent, 'Event status updated successfully');
+    success(res, updatedEvent, 'Cập nhật trạng thái sự kiện thành công');
   } catch (error: any) {
     console.error('Error updating event status:', error);
-    internalError(res, 'Failed to update event status');
+    internalError(res, 'Không thể cập nhật trạng thái sự kiện');
   }
 });
 
@@ -318,10 +318,10 @@ eventRouter.get('/stats/summary', gateStaffAuth, async (req: express.Request, re
       }
     };
 
-    success(res, stats, 'Event statistics retrieved successfully');
+    success(res, stats, 'Lấy thống kê sự kiện thành công');
   } catch (error: any) {
     console.error('Error fetching event statistics:', error);
-    internalError(res, 'Failed to fetch event statistics');
+    internalError(res, 'Không thể lấy thống kê sự kiện');
   }
 });
 

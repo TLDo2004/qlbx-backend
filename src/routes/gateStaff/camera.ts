@@ -101,12 +101,12 @@ cameraRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.R
 
     // Validate pagination parameters
     if (page < 1) {
-      badRequest(res, 'Page number must be greater than 0');
+      badRequest(res, 'Số trang phải lớn hơn 0');
       return;
     }
 
     if (limit < 1 || limit > 100) {
-      badRequest(res, 'Limit must be between 1 and 100');
+      badRequest(res, 'Giới hạn phải từ 1 đến 100');
       return;
     }
 
@@ -149,10 +149,10 @@ cameraRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.R
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1
       }
-    }, 'Cameras retrieved successfully');
+    }, 'Lấy danh sách camera thành công');
   } catch (error: any) {
     console.error('Error fetching cameras:', error);
-    internalError(res, 'Failed to fetch cameras');
+    internalError(res, 'Không thể lấy danh sách camera');
   }
 });
 
@@ -163,20 +163,20 @@ cameraRouter.post('/', gateStaffAuth, async (req: ICameraRequest, res: express.R
 
     // Validate required fields
     if (!ipAddress || !username || !password || !gate) {
-      badRequest(res, 'Missing required fields: ipAddress, username, password, gate');
+      badRequest(res, 'Thiếu các trường bắt buộc: ipAddress, username, password, gate');
       return;
     }
 
     // Validate IP address format
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (!ipRegex.test(ipAddress)) {
-      badRequest(res, 'Invalid IP address format');
+      badRequest(res, 'Định dạng địa chỉ IP không hợp lệ');
       return;
     }
 
     // Validate gate enum
     if (!Object.values(CameraGateStatus).includes(gate)) {
-      badRequest(res, `Invalid gate. Must be one of: ${Object.values(CameraGateStatus).join(', ')}`);
+      badRequest(res, `Cổng không hợp lệ. Phải là một trong: ${Object.values(CameraGateStatus).join(', ')}`);
       return;
     }
 
@@ -201,24 +201,24 @@ cameraRouter.post('/', gateStaffAuth, async (req: ICameraRequest, res: express.R
       updatedAt: camera.updatedAt
     };
 
-    created(res, cameraData, 'Camera created successfully');
+    created(res, cameraData, 'Tạo camera thành công');
   } catch (error: any) {
     console.error('Error creating camera:', error);
 
     // Handle MongoDB duplicate key error
     if (error.code === 11000) {
-      badRequest(res, 'Camera with this IP address already exists');
+      badRequest(res, 'Camera với địa chỉ IP này đã tồn tại');
       return;
     }
 
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map((err: any) => err.message);
-      badRequest(res, `Validation error: ${errors.join(', ')}`);
+      badRequest(res, `Lỗi xác thực dữ liệu: ${errors.join(', ')}`);
       return;
     }
 
-    internalError(res, 'Failed to create camera');
+    internalError(res, 'Không thể tạo camera');
   }
 });
 
@@ -226,9 +226,9 @@ cameraRouter.post('/', gateStaffAuth, async (req: ICameraRequest, res: express.R
 cameraRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const cameras = await Camera.find();
-    success(res, cameras, 'Cameras fetched successfully');
+    success(res, cameras, 'Lấy danh sách camera thành công');
   } catch (error: any) {
-    internalError(res, 'Failed to fetch cameras');
+    internalError(res, 'Không thể lấy danh sách camera');
   }
 });
 
@@ -239,7 +239,7 @@ cameraRouter.get('/:id/password', gateStaffAuth, async (req: express.Request, re
 
     // Validate ObjectId format
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      badRequest(res, 'Invalid camera ID format');
+      badRequest(res, 'Định dạng ID camera không hợp lệ');
       return;
     }
 
@@ -247,7 +247,7 @@ cameraRouter.get('/:id/password', gateStaffAuth, async (req: express.Request, re
     const camera = await Camera.findById(id);
 
     if (!camera) {
-      notFound(res, 'Camera not found');
+      notFound(res, 'Không tìm thấy camera');
       return;
     }
 
@@ -262,8 +262,8 @@ cameraRouter.get('/:id/password', gateStaffAuth, async (req: express.Request, re
       decryptedPassword = decryptPassword(camera.password);
     } catch (error) {
       console.error('Error decrypting password for camera:', id, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown decryption error';
-      badRequest(res, `Failed to decrypt password: ${errorMessage}`);
+      const errorMessage = error instanceof Error ? error.message : 'Lỗi giải mã không xác định';
+      badRequest(res, `Không thể giải mã mật khẩu: ${errorMessage}`);
       return;
     }
 
@@ -273,10 +273,10 @@ cameraRouter.get('/:id/password', gateStaffAuth, async (req: express.Request, re
       ipAddress: camera.ipAddress,
       username: camera.username,
       password: decryptedPassword
-    }, 'Password retrieved successfully');
+    }, 'Lấy mật khẩu camera thành công');
   } catch (error: any) {
     console.error('Error fetching camera password:', error);
-    internalError(res, 'Failed to fetch camera password');
+    internalError(res, 'Không thể lấy mật khẩu camera');
   }
 });
 
@@ -288,13 +288,13 @@ cameraRouter.put('/:id', gateStaffAuth, async (req: ICameraUpdateRequest, res: e
 
     // Validate ObjectId format
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      badRequest(res, 'Invalid camera ID format');
+      badRequest(res, 'Định dạng ID camera không hợp lệ');
       return;
     }
 
     // Check if at least one field is provided for update
     if (!ipAddress && !username && !password) {
-      badRequest(res, 'At least one field (ipAddress, username, password) must be provided for update');
+      badRequest(res, 'Phải cung cấp ít nhất một trường (ipAddress, username, password) để cập nhật');
       return;
     }
 
@@ -302,7 +302,7 @@ cameraRouter.put('/:id', gateStaffAuth, async (req: ICameraUpdateRequest, res: e
     if (ipAddress) {
       const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
       if (!ipRegex.test(ipAddress)) {
-        badRequest(res, 'Invalid IP address format');
+        badRequest(res, 'Định dạng địa chỉ IP không hợp lệ');
         return;
       }
     }
@@ -310,7 +310,7 @@ cameraRouter.put('/:id', gateStaffAuth, async (req: ICameraUpdateRequest, res: e
     // Find the camera first
     const existingCamera = await Camera.findById(id);
     if (!existingCamera) {
-      notFound(res, 'Camera not found');
+      notFound(res, 'Không tìm thấy camera');
       return;
     }
 
@@ -338,7 +338,7 @@ cameraRouter.put('/:id', gateStaffAuth, async (req: ICameraUpdateRequest, res: e
     );
 
     if (!updatedCamera) {
-      internalError(res, 'Failed to update camera');
+      internalError(res, 'Không thể cập nhật camera');
       return;
     }
 
@@ -352,24 +352,24 @@ cameraRouter.put('/:id', gateStaffAuth, async (req: ICameraUpdateRequest, res: e
       updatedAt: updatedCamera.updatedAt
     };
 
-    success(res, cameraData, 'Camera updated successfully');
+    success(res, cameraData, 'Cập nhật camera thành công');
   } catch (error: any) {
     console.error('Error updating camera:', error);
 
     // Handle MongoDB duplicate key error
     if (error.code === 11000) {
-      badRequest(res, 'Camera with this IP address already exists');
+      badRequest(res, 'Camera với địa chỉ IP này đã tồn tại');
       return;
     }
 
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map((err: any) => err.message);
-      badRequest(res, `Validation error: ${errors.join(', ')}`);
+      badRequest(res, `Lỗi xác thực dữ liệu: ${errors.join(', ')}`);
       return;
     }
 
-    internalError(res, 'Failed to update camera');
+    internalError(res, 'Không thể cập nhật camera');
   }
 });
 
@@ -380,7 +380,7 @@ cameraRouter.delete('/:id', gateStaffAuth, async (req: express.Request, res: exp
 
     // Validate ObjectId format
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      badRequest(res, 'Invalid camera ID format');
+      badRequest(res, 'Định dạng ID camera không hợp lệ');
       return;
     }
 
@@ -388,7 +388,7 @@ cameraRouter.delete('/:id', gateStaffAuth, async (req: express.Request, res: exp
     const deletedCamera = await Camera.findByIdAndDelete(id);
 
     if (!deletedCamera) {
-      notFound(res, 'Camera not found');
+      notFound(res, 'Không tìm thấy camera');
       return;
     }
 
@@ -402,10 +402,10 @@ cameraRouter.delete('/:id', gateStaffAuth, async (req: express.Request, res: exp
         createdAt: deletedCamera.createdAt,
         updatedAt: deletedCamera.updatedAt
       }
-    }, 'Camera deleted successfully');
+    }, 'Xóa camera thành công');
   } catch (error: any) {
     console.error('Error deleting camera:', error);
-    internalError(res, 'Failed to delete camera');
+    internalError(res, 'Không thể xóa camera');
   }
 });
 

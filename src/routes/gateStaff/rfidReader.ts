@@ -21,22 +21,22 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
     const { comPort, baudRate = 57600, gateId } = req.body;
 
     if (!comPort || typeof comPort !== 'string') {
-      badRequest(res, 'Missing or invalid field: comPort');
+      badRequest(res, 'Thiếu hoặc trường comPort không hợp lệ');
       return;
     }
     if (typeof baudRate !== 'number' || baudRate <= 0) {
-      badRequest(res, 'Invalid baudRate');
+      badRequest(res, 'BaudRate không hợp lệ');
       return;
     }
     if (!gateId || typeof gateId !== 'string') {
-      badRequest(res, 'Missing or invalid field: gateId');
+      badRequest(res, 'Thiếu hoặc trường gateId không hợp lệ');
       return;
     }
 
     // Basic COM port format validation (e.g. COM1, COM12)
     const comRegex = /^COM\d+$/i;
     if (!comRegex.test(comPort)) {
-      badRequest(res, 'Invalid COM port format. Example: COM5');
+      badRequest(res, 'Định dạng cổng COM không hợp lệ. Ví dụ: COM5');
       return;
     }
 
@@ -177,7 +177,7 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
 
     } catch (serialErr: any) {
       console.error('Failed to initialize SerialPort:', serialErr);
-      internalError(res, 'Failed to initialize SerialPort');
+      internalError(res, 'Không thể khởi tạo SerialPort');
       return;
     }
 
@@ -210,7 +210,7 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
 
   } catch (error: any) {
     console.error('Error in RFID alert stream endpoint:', error);
-    internalError(res, 'Internal server error while setting up RFID stream');
+    internalError(res, 'Lỗi máy chủ khi thiết lập luồng RFID');
   }
 });
 
