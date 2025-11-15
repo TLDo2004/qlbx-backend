@@ -5,6 +5,7 @@ export interface IGateStaff extends Document {
     uid: string;
     fullName: string;
     phone: string;
+    urlImage?: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -24,6 +25,10 @@ const GateStaffSchema = new Schema<IGateStaff>({
     phone: {
         type: String,
         required: true
+    },
+    urlImage: {
+        type: String,
+        required: false
     },
     isActive: {
         type: Boolean,
