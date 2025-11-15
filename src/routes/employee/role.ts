@@ -14,7 +14,7 @@ roleRouter.get('/list', async (req: express.Request, res: express.Response): Pro
     });
   } catch (error) {
     console.error('Error fetching roles:', error);
-    internalError(res, 'Failed to fetch roles');
+    internalError(res, 'Không thể lấy danh sách vai trò');
   }
 });
 

@@ -56,20 +56,20 @@ anprRouter.post('/snapshot', gateStaffAuth, async (req: IANPRSnapshotRequest, re
 
     // Validate required fields
     if (!ipAddress || !username || !password) {
-      badRequest(res, 'Missing required fields: ipAddress, username, password');
+      badRequest(res, 'Thiếu các trường bắt buộc: ipAddress, username, password');
       return;
     }
 
     // Validate IP address format
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (!ipRegex.test(ipAddress)) {
-      badRequest(res, 'Invalid IP address format');
+      badRequest(res, 'Định dạng địa chỉ IP không hợp lệ');
       return;
     }
 
     // Validate channel number
     if (channel < 1 || channel > 32) {
-      badRequest(res, 'Channel number must be between 1 and 32');
+      badRequest(res, 'Số kênh phải từ 1 đến 32');
       return;
     }
 
@@ -112,18 +112,18 @@ anprRouter.post('/snapshot', gateStaffAuth, async (req: IANPRSnapshotRequest, re
         res.send(imageData);
       } else {
         console.error(`Curl exit code: ${code}, Image data length: ${imageData.length}`);
-        badRequest(res, 'Failed to retrieve snapshot from camera');
+        badRequest(res, 'Không thể lấy ảnh chụp từ camera');
       }
     });
 
     curl.on('error', (error: any) => {
       console.error('Curl process error:', error);
-      badRequest(res, 'Failed to execute curl command');
+      badRequest(res, 'Không thể thực thi lệnh curl');
     });
 
   } catch (error: any) {
     console.error('Error in ANPR snapshot endpoint:', error);
-    internalError(res, 'Internal server error while processing snapshot request');
+    internalError(res, 'Lỗi máy chủ khi xử lý yêu cầu chụp ảnh');
   }
 });
 
@@ -134,14 +134,14 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
 
     // Validate required fields
     if (!ipAddress || !username || !password || !gateId) {
-      badRequest(res, 'Missing required fields: ipAddress, username, password, gateId');
+      badRequest(res, 'Thiếu các trường bắt buộc: ipAddress, username, password, gateId');
       return;
     }
 
     // Validate IP address format
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (!ipRegex.test(ipAddress)) {
-      badRequest(res, 'Invalid IP address format');
+      badRequest(res, 'Định dạng địa chỉ IP không hợp lệ');
       return;
     }
 
@@ -537,21 +537,21 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
       console.error('Error setting up alert stream:', error);
       
       if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-        badRequest(res, 'Cannot connect to camera. Please check IP address and network connectivity.');
+        badRequest(res, 'Không thể kết nối đến camera. Vui lòng kiểm tra địa chỉ IP và kết nối mạng.');
         return;
       }
       
       if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        badRequest(res, 'Request timeout. Camera may be busy or unreachable.');
+        badRequest(res, 'Hết thời gian chờ. Camera có thể đang bận hoặc không thể truy cập.');
         return;
       }
       
-      internalError(res, 'Failed to establish alert stream connection');
+      internalError(res, 'Không thể thiết lập kết nối luồng cảnh báo');
     }
 
   } catch (error: any) {
     console.error('Error in ANPR alert stream endpoint:', error);
-    internalError(res, 'Internal server error while setting up alert stream');
+    internalError(res, 'Lỗi máy chủ khi thiết lập luồng cảnh báo');
   }
 });
 
@@ -570,21 +570,21 @@ anprRouter.post('/searchImages', gateStaffAuth, async (req: IImageSearchRequest,
 
     // Validate required fields
     if (!ipAddress || !username || !password) {
-      badRequest(res, 'Missing required fields: ipAddress, username, password');
+      badRequest(res, 'Thiếu các trường bắt buộc: ipAddress, username, password');
       return;
     }
 
     // Validate IP address format
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (!ipRegex.test(ipAddress)) {
-      badRequest(res, 'Invalid IP address format');
+      badRequest(res, 'Định dạng địa chỉ IP không hợp lệ');
       return;
     }
 
     // Validate time format
     const timeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
     if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
-      badRequest(res, 'Invalid time format. Use ISO format: 2025-10-08T00:00:00Z');
+      badRequest(res, 'Định dạng thời gian không hợp lệ. Sử dụng định dạng ISO: 2025-10-08T00:00:00Z');
       return;
     }
 
@@ -643,7 +643,7 @@ anprRouter.post('/searchImages', gateStaffAuth, async (req: IImageSearchRequest,
           
           res.json({
             success: true,
-            message: 'Images retrieved successfully',
+            message: 'Lấy danh sách ảnh thành công',
             data: {
               searchID: searchID,
               totalMatches: images.length,
@@ -657,22 +657,22 @@ anprRouter.post('/searchImages', gateStaffAuth, async (req: IImageSearchRequest,
           });
         } catch (error) {
           console.error('Error parsing search response:', error);
-          badRequest(res, 'Failed to parse search response from camera');
+          badRequest(res, 'Không thể phân tích phản hồi tìm kiếm từ camera');
         }
       } else {
         console.error(`Curl exit code: ${code}, Response data length: ${responseData.length}`);
-        badRequest(res, 'Failed to search images from camera');
+        badRequest(res, 'Không thể tìm kiếm ảnh từ camera');
       }
     });
 
     curl.on('error', (error: any) => {
       console.error('Curl process error:', error);
-      badRequest(res, 'Failed to execute curl command');
+      badRequest(res, 'Không thể thực thi lệnh curl');
     });
 
   } catch (error: any) {
     console.error('Error in ANPR search images endpoint:', error);
-    internalError(res, 'Internal server error while searching images');
+    internalError(res, 'Lỗi máy chủ khi tìm kiếm ảnh');
   }
 });
 
@@ -682,7 +682,7 @@ anprRouter.post('/downloadImage', gateStaffAuth, async (req: IDownloadImageReque
     const { username, password, downloadURL } = req.body;
 
     if (!username || !password || !downloadURL) {
-      badRequest(res, 'Missing required fields: username, password, downloadURL');
+      badRequest(res, 'Thiếu các trường bắt buộc: username, password, downloadURL');
       return;
     }
 
@@ -691,7 +691,7 @@ anprRouter.post('/downloadImage', gateStaffAuth, async (req: IDownloadImageReque
 
     // Basic validation to ensure URL points to ISAPI Streaming tracks
     if (!/^https?:\/\/[^\s]+\/ISAPI\/Streaming\/tracks\//i.test(url)) {
-      badRequest(res, 'Invalid downloadURL');
+      badRequest(res, 'URL tải xuống không hợp lệ');
       return;
     }
 
@@ -735,17 +735,17 @@ anprRouter.post('/downloadImage', gateStaffAuth, async (req: IDownloadImageReque
         res.send(imageData);
       } else {
         console.error(`Curl exit code: ${code}, Image length: ${imageData.length}`);
-        badRequest(res, 'Failed to retrieve image');
+        badRequest(res, 'Không thể tải ảnh');
       }
     });
 
     curl.on('error', (error: any) => {
       console.error('Curl process error:', error);
-      badRequest(res, 'Failed to execute curl command');
+      badRequest(res, 'Không thể thực thi lệnh curl');
     });
   } catch (error: any) {
     console.error('Error in downloadImage endpoint:', error);
-    internalError(res, 'Internal server error while downloading image');
+    internalError(res, 'Lỗi máy chủ khi tải ảnh');
   }
 });
 

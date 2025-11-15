@@ -29,7 +29,7 @@ employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express
     if (page < 1) {
       res.status(400).json({
         success: false,
-        error: 'Page number must be greater than 0'
+        error: 'Số trang phải lớn hơn 0'
       });
       return;
     }
@@ -37,7 +37,7 @@ employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express
     if (limit < 1 || limit > 100) {
       res.status(400).json({
         success: false,
-        error: 'Limit must be between 1 and 100'
+        error: 'Giới hạn phải từ 1 đến 100'
       });
       return;
     }
@@ -87,7 +87,7 @@ employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express
     });
   } catch (error) {
     console.error('Error fetching employees:', error);
-    internalError(res, 'Failed to fetch employees');
+    internalError(res, 'Không thể lấy danh sách nhân viên');
   }
 });
 
@@ -99,7 +99,7 @@ employeeRouter.get('/me', async (req: express.Request, res: express.Response): P
     if (!uid) {
       res.status(401).json({
         success: false,
-        error: 'Unauthorized: missing user context'
+        error: 'Không được phép: thiếu thông tin người dùng'
       });
       return;
     }
@@ -109,7 +109,7 @@ employeeRouter.get('/me', async (req: express.Request, res: express.Response): P
     if (!employee) {
       res.status(404).json({
         success: false,
-        error: 'Employee not found'
+        error: 'Không tìm thấy nhân viên'
       });
       return;
     }
@@ -133,7 +133,7 @@ employeeRouter.get('/me', async (req: express.Request, res: express.Response): P
     });
   } catch (error) {
     console.error('Error fetching current employee:', error);
-    internalError(res, 'Failed to fetch current employee');
+    internalError(res, 'Không thể lấy thông tin nhân viên hiện tại');
   }
 });
 
@@ -146,7 +146,7 @@ employeeRouter.get('/:id', adminAuth, async (req: express.Request, res: express.
     if (!employee) {
       res.status(404).json({
         success: false,
-        error: 'Employee not found'
+        error: 'Không tìm thấy nhân viên'
       });
       return;
     }
@@ -174,7 +174,7 @@ employeeRouter.get('/:id', adminAuth, async (req: express.Request, res: express.
     });
   } catch (error) {
     console.error('Error fetching employee:', error);
-    internalError(res, 'Failed to fetch employee');
+    internalError(res, 'Không thể lấy thông tin nhân viên');
   }
 });
 
@@ -186,7 +186,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     // Validate required fields
     if (!fullName || !phone || !roleId || !email) {
       res.status(400).json({
-        error: 'Missing required fields: fullName, phone, roleId, email'
+        error: 'Thiếu các trường bắt buộc: fullName, phone, roleId, email'
       });
       return;
     }
@@ -194,7 +194,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     // Validate roleId format
     if (!mongoose.Types.ObjectId.isValid(roleId)) {
       res.status(400).json({
-        error: 'Invalid roleId format'
+        error: 'Định dạng roleId không hợp lệ'
       });
       return;
     }
@@ -202,7 +202,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
 
     if (!roleExists) {
       res.status(400).json({
-        error: 'Role not found',
+        error: 'Không tìm thấy vai trò',
         searchedId: roleId
       });
       return;
@@ -212,7 +212,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       res.status(400).json({
-        error: 'Invalid email format'
+        error: 'Định dạng email không hợp lệ'
       });
       return;
     }
@@ -256,7 +256,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
 
     res.status(201).json({
       success: true,
-      message: 'Employee created successfully and welcome email sent',
+      message: 'Tạo nhân viên thành công và đã gửi email chào mừng',
       data: transformedData
     });
   } catch (error: any) {
@@ -266,7 +266,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     if (error.message?.includes('Email already exists')) {
       res.status(409).json({
         success: false,
-        error: 'Email already exists in the system'
+        error: 'Email đã tồn tại trong hệ thống'
       });
       return;
     }
@@ -274,7 +274,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     if (error.message?.includes('Invalid email')) {
       res.status(400).json({
         success: false,
-        error: 'Invalid email address'
+        error: 'Địa chỉ email không hợp lệ'
       });
       return;
     }
@@ -283,7 +283,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     if (error.code === 11000) {
       res.status(409).json({
         success: false,
-        error: 'Employee with this information already exists'
+        error: 'Nhân viên với thông tin này đã tồn tại'
       });
       return;
     }
@@ -292,7 +292,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     if (error.message?.includes('Resend package not found')) {
       res.status(500).json({
         success: false,
-        error: 'Email service not available. Please install resend package.'
+        error: 'Dịch vụ email không khả dụng. Vui lòng cài đặt gói resend.'
       });
       return;
     }
@@ -301,7 +301,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     if (error.message?.includes('Firebase')) {
       res.status(500).json({
         success: false,
-        error: 'Firebase service error: ' + error.message
+        error: 'Lỗi dịch vụ Firebase: ' + error.message
       });
       return;
     }
@@ -309,7 +309,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
     // Generic error response with more details
     res.status(500).json({
       success: false,
-      error: 'Failed to create employee',
+      error: 'Không thể tạo nhân viên',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

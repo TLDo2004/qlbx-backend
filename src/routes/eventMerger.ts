@@ -16,10 +16,10 @@ eventMergerRouter.get('/status', gateStaffAuth, async (req: express.Request, res
     const eventMergerService = EventMergerService.getInstance();
     const status = eventMergerService.getStatus();
     
-    success(res, status, 'Event Merger Service status retrieved successfully');
+    success(res, status, 'Lấy trạng thái dịch vụ gộp sự kiện thành công');
   } catch (error: any) {
     console.error('Error getting merger status:', error);
-    internalError(res, 'Failed to get merger status');
+    internalError(res, 'Không thể lấy trạng thái dịch vụ gộp sự kiện');
   }
 });
 
@@ -30,10 +30,10 @@ eventMergerRouter.post('/start', gateStaffAuth, async (req: express.Request, res
     eventMergerService.start();
     
     const status = eventMergerService.getStatus();
-    success(res, status, 'Event Merger Service started successfully');
+    success(res, status, 'Khởi động dịch vụ gộp sự kiện thành công');
   } catch (error: any) {
     console.error('Error starting merger service:', error);
-    internalError(res, 'Failed to start merger service');
+    internalError(res, 'Không thể khởi động dịch vụ gộp sự kiện');
   }
 });
 
@@ -44,10 +44,10 @@ eventMergerRouter.post('/stop', gateStaffAuth, async (req: express.Request, res:
     eventMergerService.stop();
     
     const status = eventMergerService.getStatus();
-    success(res, status, 'Event Merger Service stopped successfully');
+    success(res, status, 'Dừng dịch vụ gộp sự kiện thành công');
   } catch (error: any) {
     console.error('Error stopping merger service:', error);
-    internalError(res, 'Failed to stop merger service');
+    internalError(res, 'Không thể dừng dịch vụ gộp sự kiện');
   }
 });
 
@@ -61,7 +61,7 @@ eventMergerRouter.post('/config', gateStaffAuth, async (req: express.Request, re
     
     if (mergeInterval !== undefined) {
       if (typeof mergeInterval !== 'number' || mergeInterval < 1000) {
-        badRequest(res, 'mergeInterval must be a number >= 1000 (1 second)');
+        badRequest(res, 'mergeInterval phải là số >= 1000 (1 giây)');
         return;
       }
       config.mergeInterval = mergeInterval;
@@ -69,7 +69,7 @@ eventMergerRouter.post('/config', gateStaffAuth, async (req: express.Request, re
 
     if (deltaTimeThreshold !== undefined) {
       if (typeof deltaTimeThreshold !== 'number' || deltaTimeThreshold < 0) {
-        badRequest(res, 'deltaTimeThreshold must be a number >= 0');
+        badRequest(res, 'deltaTimeThreshold phải là số >= 0');
         return;
       }
       config.deltaTimeThreshold = deltaTimeThreshold;
@@ -77,7 +77,7 @@ eventMergerRouter.post('/config', gateStaffAuth, async (req: express.Request, re
 
     if (maxRetries !== undefined) {
       if (typeof maxRetries !== 'number' || maxRetries < 0) {
-        badRequest(res, 'maxRetries must be a number >= 0');
+        badRequest(res, 'maxRetries phải là số >= 0');
         return;
       }
       config.maxRetries = maxRetries;
@@ -85,7 +85,7 @@ eventMergerRouter.post('/config', gateStaffAuth, async (req: express.Request, re
 
     if (retryDelay !== undefined) {
       if (typeof retryDelay !== 'number' || retryDelay < 0) {
-        badRequest(res, 'retryDelay must be a number >= 0');
+        badRequest(res, 'retryDelay phải là số >= 0');
         return;
       }
       config.retryDelay = retryDelay;
@@ -95,10 +95,10 @@ eventMergerRouter.post('/config', gateStaffAuth, async (req: express.Request, re
     eventMergerService.updateConfig(config);
     
     const status = eventMergerService.getStatus();
-    success(res, status, 'Event Merger Service configuration updated successfully');
+    success(res, status, 'Cập nhật cấu hình dịch vụ gộp sự kiện thành công');
   } catch (error: any) {
     console.error('Error updating merger config:', error);
-    internalError(res, 'Failed to update merger configuration');
+    internalError(res, 'Không thể cập nhật cấu hình dịch vụ gộp sự kiện');
   }
 });
 
@@ -108,10 +108,10 @@ eventMergerRouter.post('/merge', gateStaffAuth, async (req: express.Request, res
     const eventMergerService = EventMergerService.getInstance();
     const result = await eventMergerService.manualMerge();
     
-    success(res, result, 'Manual merge operation completed successfully');
+    success(res, result, 'Thực hiện gộp thủ công thành công');
   } catch (error: any) {
     console.error('Error during manual merge:', error);
-    internalError(res, 'Failed to perform manual merge');
+    internalError(res, 'Không thể thực hiện gộp thủ công');
   }
 });
 

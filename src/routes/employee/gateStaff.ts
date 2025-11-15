@@ -14,7 +14,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
     if (!fullName || !phone || !email) {
       res.status(400).json({
         success: false,
-        error: 'Missing required fields: fullName, phone, email'
+        error: 'Thiếu các trường bắt buộc: fullName, phone, email'
       });
       return;
     }
@@ -24,7 +24,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
     if (!emailRegex.test(email)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid email format'
+        error: 'Định dạng email không hợp lệ'
       });
       return;
     }
@@ -62,7 +62,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
 
     res.status(201).json({
       success: true,
-      message: 'Gate staff created successfully and welcome email sent',
+      message: 'Tạo nhân viên cổng thành công và đã gửi email chào mừng',
       data: transformedData
     });
   } catch (error: any) {
@@ -72,7 +72,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
     if (error.message?.includes('Email already exists')) {
       res.status(409).json({
         success: false,
-        error: 'Email already exists in the system'
+        error: 'Email đã tồn tại trong hệ thống'
       });
       return;
     }
@@ -80,7 +80,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
     if (error.message?.includes('Invalid email')) {
       res.status(400).json({
         success: false,
-        error: 'Invalid email address'
+        error: 'Địa chỉ email không hợp lệ'
       });
       return;
     }
@@ -89,7 +89,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
     if (error.code === 11000) {
       res.status(409).json({
         success: false,
-        error: 'Gate staff with this information already exists'
+        error: 'Nhân viên cổng với thông tin này đã tồn tại'
       });
       return;
     }
@@ -98,7 +98,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
     if (error.message?.includes('Resend package not found')) {
       res.status(500).json({
         success: false,
-        error: 'Email service not available. Please install resend package.'
+        error: 'Dịch vụ email không khả dụng. Vui lòng cài đặt gói resend.'
       });
       return;
     }
@@ -107,7 +107,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
     if (error.message?.includes('Firebase')) {
       res.status(500).json({
         success: false,
-        error: 'Firebase service error: ' + error.message
+        error: 'Lỗi dịch vụ Firebase: ' + error.message
       });
       return;
     }
@@ -115,7 +115,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
     // Generic error response with more details
     res.status(500).json({
       success: false,
-      error: 'Failed to create gate staff',
+      error: 'Không thể tạo nhân viên cổng',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

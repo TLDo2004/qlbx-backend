@@ -26,7 +26,7 @@ vehicleRouter.get('/', async (req: express.Request, res: express.Response): Prom
     if (page < 1) {
       res.status(400).json({
         success: false,
-        error: 'Page number must be greater than 0'
+        error: 'Số trang phải lớn hơn 0'
       });
       return;
     }
@@ -34,7 +34,7 @@ vehicleRouter.get('/', async (req: express.Request, res: express.Response): Prom
     if (limit < 1 || limit > 100) {
       res.status(400).json({
         success: false,
-        error: 'Limit must be between 1 and 100'
+        error: 'Giới hạn phải từ 1 đến 100'
       });
       return;
     }
@@ -66,7 +66,7 @@ vehicleRouter.get('/', async (req: express.Request, res: express.Response): Prom
     });
   } catch (error) {
     console.error('Error fetching vehicles:', error);
-    internalError(res, 'Failed to fetch vehicles');
+    internalError(res, 'Không thể lấy danh sách phương tiện');
   }
 });
 
@@ -79,7 +79,7 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
     if (!license_plate || license_plate.trim() === '') {
       res.status(400).json({
         success: false,
-        error: 'License plate is required'
+        error: 'Biển số xe là bắt buộc'
       });
       return;
     }
@@ -92,7 +92,7 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
     if (!vehicle) {
       res.status(404).json({
         success: false,
-        error: 'Vehicle not found'
+        error: 'Không tìm thấy phương tiện'
       });
       return;
     }
@@ -113,7 +113,7 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
     });
   } catch (error) {
     console.error('Error fetching vehicle by license plate:', error);
-    internalError(res, 'Failed to fetch vehicle');
+    internalError(res, 'Không thể lấy thông tin phương tiện');
   }
 });
 
@@ -126,7 +126,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     if (!license_plate || !gate) {
       res.status(400).json({
         success: false,
-        error: 'Missing required fields: license_plate and gate are required'
+        error: 'Thiếu các trường bắt buộc: license_plate và gate là bắt buộc'
       });
       return;
     }
@@ -135,7 +135,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     if (!Object.values(VehicleGateStatus).includes(gate)) {
       res.status(400).json({
         success: false,
-        error: `Invalid gate. Must be one of: ${Object.values(VehicleGateStatus).join(', ')}`
+        error: `Cổng không hợp lệ. Phải là một trong: ${Object.values(VehicleGateStatus).join(', ')}`
       });
       return;
     }
@@ -144,7 +144,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     if (vehicle_type && !Object.values(VehicleType).includes(vehicle_type as VehicleType)) {
       res.status(400).json({
         success: false,
-        error: `Invalid vehicle_type. Must be one of: ${Object.values(VehicleType).join(', ')}`
+        error: `Loại phương tiện không hợp lệ. Phải là một trong: ${Object.values(VehicleType).join(', ')}`
       });
       return;
     }
@@ -157,7 +157,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     if (existingVehicle) {
       res.status(409).json({
         success: false,
-        error: 'Vehicle with this license plate already exists'
+        error: 'Phương tiện với biển số này đã tồn tại'
       });
       return;
     }
@@ -173,7 +173,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
       if (!existingRfidEtc) {
         res.status(400).json({
           success: false,
-          error: 'RFID/ETC not found in system. Please add it to rfid_etc collection first'
+          error: 'Không tìm thấy RFID/ETC trong hệ thống. Vui lòng thêm vào bộ sưu tập rfid_etc trước'
         });
         return;
       }
@@ -186,7 +186,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
       if (existingRfidVehicle) {
         res.status(409).json({
           success: false,
-          error: 'Vehicle with this RFID/ETC already exists'
+          error: 'Phương tiện với RFID/ETC này đã tồn tại'
         });
         return;
       }
@@ -209,7 +209,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
 
     res.status(201).json({
       success: true,
-      message: 'Vehicle created successfully',
+      message: 'Tạo phương tiện thành công',
       data: {
         _id: vehicle._id,
         license_plate: vehicle.license_plate,
@@ -227,10 +227,10 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
 
     // Handle MongoDB duplicate key errors
     if (error.code === 11000) {
-      const field = error.keyPattern?.license_plate ? 'license_plate' : 'rfid_etc';
+      const field = error.keyPattern?.license_plate ? 'biển số' : 'RFID/ETC';
       res.status(409).json({
         success: false,
-        error: `Vehicle with this ${field} already exists`
+        error: `Phương tiện với ${field} này đã tồn tại`
       });
       return;
     }
@@ -240,13 +240,13 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
       const errors = Object.values(error.errors).map((err: any) => err.message);
       res.status(400).json({
         success: false,
-        error: 'Validation error',
+        error: 'Lỗi xác thực dữ liệu',
         details: errors
       });
       return;
     }
 
-    internalError(res, 'Failed to create vehicle');
+    internalError(res, 'Không thể tạo phương tiện');
   }
 });
 
@@ -260,7 +260,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     if (!license_plate || license_plate.trim() === '') {
       res.status(400).json({
         success: false,
-        error: 'License plate is required'
+        error: 'Biển số xe là bắt buộc'
       });
       return;
     }
@@ -273,7 +273,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     if (!existingVehicle) {
       res.status(404).json({
         success: false,
-        error: 'Vehicle not found'
+        error: 'Không tìm thấy phương tiện'
       });
       return;
     }
@@ -282,7 +282,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     if (gate && !Object.values(VehicleGateStatus).includes(gate)) {
       res.status(400).json({
         success: false,
-        error: `Invalid gate. Must be one of: ${Object.values(VehicleGateStatus).join(', ')}`
+        error: `Cổng không hợp lệ. Phải là một trong: ${Object.values(VehicleGateStatus).join(', ')}`
       });
       return;
     }
@@ -291,7 +291,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     if (vehicle_type && !Object.values(VehicleType).includes(vehicle_type as VehicleType)) {
       res.status(400).json({
         success: false,
-        error: `Invalid vehicle_type. Must be one of: ${Object.values(VehicleType).join(', ')}`
+        error: `Loại phương tiện không hợp lệ. Phải là một trong: ${Object.values(VehicleType).join(', ')}`
       });
       return;
     }
@@ -307,7 +307,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
       if (!existingRfidEtc) {
         res.status(400).json({
           success: false,
-          error: 'RFID/ETC not found in system. Please add it to rfid_etc collection first'
+          error: 'Không tìm thấy RFID/ETC trong hệ thống. Vui lòng thêm vào bộ sưu tập rfid_etc trước'
         });
         return;
       }
@@ -321,7 +321,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
       if (existingRfidVehicle) {
         res.status(409).json({
           success: false,
-          error: 'Vehicle with this RFID/ETC already exists'
+          error: 'Phương tiện với RFID/ETC này đã tồn tại'
         });
         return;
       }
@@ -344,7 +344,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
 
     res.json({
       success: true,
-      message: 'Vehicle updated successfully',
+      message: 'Cập nhật phương tiện thành công',
       data: {
         _id: updatedVehicle?._id,
         license_plate: updatedVehicle?.license_plate,
@@ -362,10 +362,10 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
 
     // Handle MongoDB duplicate key errors
     if (error.code === 11000) {
-      const field = error.keyPattern?.rfid_etc ? 'rfid_etc' : 'license_plate';
+      const field = error.keyPattern?.rfid_etc ? 'RFID/ETC' : 'biển số';
       res.status(409).json({
         success: false,
-        error: `Vehicle with this ${field} already exists`
+        error: `Phương tiện với ${field} này đã tồn tại`
       });
       return;
     }
@@ -375,13 +375,13 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
       const errors = Object.values(error.errors).map((err: any) => err.message);
       res.status(400).json({
         success: false,
-        error: 'Validation error',
+        error: 'Lỗi xác thực dữ liệu',
         details: errors
       });
       return;
     }
 
-    internalError(res, 'Failed to update vehicle');
+    internalError(res, 'Không thể cập nhật phương tiện');
   }
 });
 

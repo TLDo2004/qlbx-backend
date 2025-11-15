@@ -23,7 +23,7 @@ rfidEtcRouter.get('/', async (req: express.Request, res: express.Response): Prom
     if (page < 1) {
       res.status(400).json({
         success: false,
-        error: 'Page number must be greater than 0'
+        error: 'Số trang phải lớn hơn 0'
       });
       return;
     }
@@ -31,7 +31,7 @@ rfidEtcRouter.get('/', async (req: express.Request, res: express.Response): Prom
     if (limit < 1 || limit > 100) {
       res.status(400).json({
         success: false,
-        error: 'Limit must be between 1 and 100'
+        error: 'Giới hạn phải từ 1 đến 100'
       });
       return;
     }
@@ -63,7 +63,7 @@ rfidEtcRouter.get('/', async (req: express.Request, res: express.Response): Prom
     });
   } catch (error) {
     console.error('Error fetching RFID/ETC:', error);
-    internalError(res, 'Failed to fetch RFID/ETC');
+    internalError(res, 'Không thể lấy danh sách RFID/ETC');
   }
 });
 
@@ -76,7 +76,7 @@ rfidEtcRouter.get('/:rfid_etc', async (req: express.Request, res: express.Respon
     if (!rfid_etc || rfid_etc.trim() === '') {
       res.status(400).json({
         success: false,
-        error: 'RFID/ETC code is required'
+        error: 'Mã RFID/ETC là bắt buộc'
       });
       return;
     }
@@ -89,7 +89,7 @@ rfidEtcRouter.get('/:rfid_etc', async (req: express.Request, res: express.Respon
     if (!rfidEtc) {
       res.status(404).json({
         success: false,
-        error: 'RFID/ETC not found'
+        error: 'Không tìm thấy RFID/ETC'
       });
       return;
     }
@@ -107,7 +107,7 @@ rfidEtcRouter.get('/:rfid_etc', async (req: express.Request, res: express.Respon
     });
   } catch (error) {
     console.error('Error fetching RFID/ETC by code:', error);
-    internalError(res, 'Failed to fetch RFID/ETC');
+    internalError(res, 'Không thể lấy thông tin RFID/ETC');
   }
 });
 
@@ -120,7 +120,7 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
     if (!rfid_etc || !expiration_date) {
       res.status(400).json({
         success: false,
-        error: 'Missing required fields: rfid_etc and expiration_date are required'
+        error: 'Thiếu các trường bắt buộc: rfid_etc và expiration_date là bắt buộc'
       });
       return;
     }
@@ -129,7 +129,7 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
     if (status && !Object.values(RfidEtcStatus).includes(status)) {
       res.status(400).json({
         success: false,
-        error: `Invalid status. Must be one of: ${Object.values(RfidEtcStatus).join(', ')}`
+        error: `Trạng thái không hợp lệ. Phải là một trong: ${Object.values(RfidEtcStatus).join(', ')}`
       });
       return;
     }
@@ -139,7 +139,7 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
     if (isNaN(expirationDate.getTime())) {
       res.status(400).json({
         success: false,
-        error: 'Invalid expiration_date format. Please use ISO date format (YYYY-MM-DD)'
+        error: 'Định dạng expiration_date không hợp lệ. Vui lòng sử dụng định dạng ISO (YYYY-MM-DD)'
       });
       return;
     }
@@ -152,7 +152,7 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
     if (existingRfidEtc) {
       res.status(409).json({
         success: false,
-        error: 'RFID/ETC with this code already exists'
+        error: 'RFID/ETC với mã này đã tồn tại'
       });
       return;
     }
@@ -173,7 +173,7 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
 
     res.status(201).json({
       success: true,
-      message: 'RFID/ETC created successfully',
+      message: 'Tạo RFID/ETC thành công',
       data: {
         _id: rfidEtc._id,
         rfid_etc: rfidEtc.rfid_etc,
@@ -190,7 +190,7 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
     if (error.code === 11000) {
       res.status(409).json({
         success: false,
-        error: 'RFID/ETC with this code already exists'
+        error: 'RFID/ETC với mã này đã tồn tại'
       });
       return;
     }
@@ -200,13 +200,13 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
       const errors = Object.values(error.errors).map((err: any) => err.message);
       res.status(400).json({
         success: false,
-        error: 'Validation error',
+        error: 'Lỗi xác thực dữ liệu',
         details: errors
       });
       return;
     }
 
-    internalError(res, 'Failed to create RFID/ETC');
+    internalError(res, 'Không thể tạo RFID/ETC');
   }
 });
 
@@ -220,7 +220,7 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
     if (!rfid_etc || rfid_etc.trim() === '') {
       res.status(400).json({
         success: false,
-        error: 'RFID/ETC code is required'
+        error: 'Mã RFID/ETC là bắt buộc'
       });
       return;
     }
@@ -233,7 +233,7 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
     if (!existingRfidEtc) {
       res.status(404).json({
         success: false,
-        error: 'RFID/ETC not found'
+        error: 'Không tìm thấy RFID/ETC'
       });
       return;
     }
@@ -242,7 +242,7 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
     if (status && !Object.values(RfidEtcStatus).includes(status)) {
       res.status(400).json({
         success: false,
-        error: `Invalid status. Must be one of: ${Object.values(RfidEtcStatus).join(', ')}`
+        error: `Trạng thái không hợp lệ. Phải là một trong: ${Object.values(RfidEtcStatus).join(', ')}`
       });
       return;
     }
@@ -254,7 +254,7 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
       if (isNaN(expirationDate.getTime())) {
         res.status(400).json({
           success: false,
-          error: 'Invalid expiration_date format. Please use ISO date format (YYYY-MM-DD)'
+          error: 'Định dạng expiration_date không hợp lệ. Vui lòng sử dụng định dạng ISO (YYYY-MM-DD)'
         });
         return;
       }
@@ -274,7 +274,7 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
 
     res.json({
       success: true,
-      message: 'RFID/ETC updated successfully',
+      message: 'Cập nhật RFID/ETC thành công',
       data: {
         _id: updatedRfidEtc?._id,
         rfid_etc: updatedRfidEtc?.rfid_etc,
@@ -292,13 +292,13 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
       const errors = Object.values(error.errors).map((err: any) => err.message);
       res.status(400).json({
         success: false,
-        error: 'Validation error',
+        error: 'Lỗi xác thực dữ liệu',
         details: errors
       });
       return;
     }
 
-    internalError(res, 'Failed to update RFID/ETC');
+    internalError(res, 'Không thể cập nhật RFID/ETC');
   }
 });
 

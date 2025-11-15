@@ -34,7 +34,7 @@ bufferRouter.get('/status', gateStaffAuth, async (req: express.Request, res: exp
     });
   } catch (error) {
     console.error('Error fetching buffer status:', error);
-    internalError(res, 'Failed to fetch buffer status');
+    internalError(res, 'Không thể lấy trạng thái buffer');
   }
 });
 
@@ -53,7 +53,7 @@ bufferRouter.get('/rfid/events', gateStaffAuth, async (req: express.Request, res
     });
   } catch (error) {
     console.error('Error fetching RFID events:', error);
-    internalError(res, 'Failed to fetch RFID events');
+    internalError(res, 'Không thể lấy danh sách sự kiện RFID');
   }
 });
 
@@ -63,7 +63,7 @@ bufferRouter.get('/rfid/events/:gateId', gateStaffAuth, async (req: express.Requ
     const { gateId } = req.params;
     
     if (!gateId) {
-      badRequest(res, 'Gate ID is required');
+      badRequest(res, 'ID cổng là bắt buộc');
       return;
     }
 
@@ -80,7 +80,7 @@ bufferRouter.get('/rfid/events/:gateId', gateStaffAuth, async (req: express.Requ
     });
   } catch (error) {
     console.error('Error fetching RFID events by gate:', error);
-    internalError(res, 'Failed to fetch RFID events by gate');
+    internalError(res, 'Không thể lấy danh sách sự kiện RFID theo cổng');
   }
 });
 
@@ -91,7 +91,7 @@ bufferRouter.post('/rfid/events', gateStaffAuth, async (req: express.Request, re
     
     // Validate required fields
     if (!rfid_etc || !gateId) {
-      badRequest(res, 'Missing required fields: rfid_etc and gateId');
+      badRequest(res, 'Thiếu các trường bắt buộc: rfid_etc và gateId');
       return;
     }
 
@@ -105,7 +105,7 @@ bufferRouter.post('/rfid/events', gateStaffAuth, async (req: express.Request, re
     
     res.json({
       success: true,
-      message: 'RFID event added successfully',
+      message: 'Thêm sự kiện RFID thành công',
       data: {
         eventId,
         rfid_etc,
@@ -115,7 +115,7 @@ bufferRouter.post('/rfid/events', gateStaffAuth, async (req: express.Request, re
     });
   } catch (error) {
     console.error('Error adding RFID event:', error);
-    internalError(res, 'Failed to add RFID event');
+    internalError(res, 'Không thể thêm sự kiện RFID');
   }
 });
 
@@ -125,7 +125,7 @@ bufferRouter.put('/rfid/events/:eventId/process', gateStaffAuth, async (req: exp
     const { eventId } = req.params;
     
     if (!eventId) {
-      badRequest(res, 'Event ID is required');
+      badRequest(res, 'ID sự kiện là bắt buộc');
       return;
     }
 
@@ -135,17 +135,17 @@ bufferRouter.put('/rfid/events/:eventId/process', gateStaffAuth, async (req: exp
     if (success) {
       res.json({
         success: true,
-        message: 'RFID event marked as processed'
+        message: 'Đánh dấu sự kiện RFID đã xử lý'
       });
     } else {
       res.status(404).json({
         success: false,
-        error: 'RFID event not found'
+        error: 'Không tìm thấy sự kiện RFID'
       });
     }
   } catch (error) {
     console.error('Error processing RFID event:', error);
-    internalError(res, 'Failed to process RFID event');
+    internalError(res, 'Không thể xử lý sự kiện RFID');
   }
 });
 
@@ -156,17 +156,17 @@ bufferRouter.post('/config', gateStaffAuth, async (req: express.Request, res: ex
     
     // Validate configuration values
     if (deltaTimeThreshold !== undefined && (typeof deltaTimeThreshold !== 'number' || deltaTimeThreshold <= 0)) {
-      badRequest(res, 'deltaTimeThreshold must be a positive number');
+      badRequest(res, 'deltaTimeThreshold phải là số dương');
       return;
     }
     
     if (maxBufferSize !== undefined && (typeof maxBufferSize !== 'number' || maxBufferSize <= 0)) {
-      badRequest(res, 'maxBufferSize must be a positive number');
+      badRequest(res, 'maxBufferSize phải là số dương');
       return;
     }
     
     if (cleanupInterval !== undefined && (typeof cleanupInterval !== 'number' || cleanupInterval <= 0)) {
-      badRequest(res, 'cleanupInterval must be a positive number');
+      badRequest(res, 'cleanupInterval phải là số dương');
       return;
     }
 
@@ -179,11 +179,11 @@ bufferRouter.post('/config', gateStaffAuth, async (req: express.Request, res: ex
     
     res.json({
       success: true,
-      message: 'Buffer configuration updated successfully'
+      message: 'Cập nhật cấu hình buffer thành công'
     });
   } catch (error) {
     console.error('Error updating buffer configuration:', error);
-    internalError(res, 'Failed to update buffer configuration');
+    internalError(res, 'Không thể cập nhật cấu hình buffer');
   }
 });
 
@@ -198,11 +198,11 @@ bufferRouter.delete('/clear', gateStaffAuth, async (req: express.Request, res: e
     
     res.json({
       success: true,
-      message: 'All buffer events cleared'
+      message: 'Đã xóa tất cả sự kiện buffer'
     });
   } catch (error) {
     console.error('Error clearing buffer:', error);
-    internalError(res, 'Failed to clear buffer');
+    internalError(res, 'Không thể xóa buffer');
   }
 });
 
@@ -223,7 +223,7 @@ bufferRouter.get('/camera/events', gateStaffAuth, async (req: express.Request, r
     });
   } catch (error) {
     console.error('Error fetching Camera events:', error);
-    internalError(res, 'Failed to fetch Camera events');
+    internalError(res, 'Không thể lấy danh sách sự kiện Camera');
   }
 });
 
@@ -233,7 +233,7 @@ bufferRouter.get('/camera/events/:gateId', gateStaffAuth, async (req: express.Re
     const { gateId } = req.params;
     
     if (!gateId) {
-      badRequest(res, 'Gate ID is required');
+      badRequest(res, 'ID cổng là bắt buộc');
       return;
     }
 
@@ -250,7 +250,7 @@ bufferRouter.get('/camera/events/:gateId', gateStaffAuth, async (req: express.Re
     });
   } catch (error) {
     console.error('Error fetching Camera events by gate:', error);
-    internalError(res, 'Failed to fetch Camera events by gate');
+    internalError(res, 'Không thể lấy danh sách sự kiện Camera theo cổng');
   }
 });
 
@@ -260,7 +260,7 @@ bufferRouter.get('/camera/events/license/:licensePlate', gateStaffAuth, async (r
     const { licensePlate } = req.params;
     
     if (!licensePlate) {
-      badRequest(res, 'License plate is required');
+      badRequest(res, 'Biển số xe là bắt buộc');
       return;
     }
 
@@ -277,7 +277,7 @@ bufferRouter.get('/camera/events/license/:licensePlate', gateStaffAuth, async (r
     });
   } catch (error) {
     console.error('Error fetching Camera events by license plate:', error);
-    internalError(res, 'Failed to fetch Camera events by license plate');
+    internalError(res, 'Không thể lấy danh sách sự kiện Camera theo biển số');
   }
 });
 
@@ -288,7 +288,7 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
     
     // Validate required fields
     if (!license_plate || !gateId) {
-      badRequest(res, 'Missing required fields: license_plate and gateId');
+      badRequest(res, 'Thiếu các trường bắt buộc: license_plate và gateId');
       return;
     }
 
@@ -320,7 +320,7 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
     
     res.json({
       success: true,
-      message: 'Camera event added successfully',
+      message: 'Thêm sự kiện Camera thành công',
       data: {
         eventId,
         license_plate,
@@ -330,7 +330,7 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
     });
   } catch (error) {
     console.error('Error adding Camera event:', error);
-    internalError(res, 'Failed to add Camera event');
+    internalError(res, 'Không thể thêm sự kiện Camera');
   }
 });
 
@@ -340,7 +340,7 @@ bufferRouter.put('/camera/events/:eventId/process', gateStaffAuth, async (req: e
     const { eventId } = req.params;
     
     if (!eventId) {
-      badRequest(res, 'Event ID is required');
+      badRequest(res, 'ID sự kiện là bắt buộc');
       return;
     }
 
@@ -350,17 +350,17 @@ bufferRouter.put('/camera/events/:eventId/process', gateStaffAuth, async (req: e
     if (success) {
       res.json({
         success: true,
-        message: 'Camera event marked as processed'
+        message: 'Đánh dấu sự kiện Camera đã xử lý'
       });
     } else {
       res.status(404).json({
         success: false,
-        error: 'Camera event not found'
+        error: 'Không tìm thấy sự kiện Camera'
       });
     }
   } catch (error) {
     console.error('Error processing Camera event:', error);
-    internalError(res, 'Failed to process Camera event');
+    internalError(res, 'Không thể xử lý sự kiện Camera');
   }
 });
 
