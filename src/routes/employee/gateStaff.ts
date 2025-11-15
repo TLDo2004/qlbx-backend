@@ -8,7 +8,7 @@ const gateStaffRouter = express.Router();
 //POST /employee/gateStaff - create a new gate staff
 gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
-    const { fullName, phone, email } = req.body;
+    const { fullName, phone, email, urlImage } = req.body;
 
     // Validate required fields
     if (!fullName || !phone || !email) {
@@ -42,6 +42,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
         uid: userResult.uid,
         fullName,
         phone,
+        urlImage: urlImage || undefined
       });
     } catch (createError) {
       console.error('Error creating gate staff in MongoDB:', createError);
@@ -55,6 +56,7 @@ gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.R
       fullName: gateStaff.fullName,
       phone: gateStaff.phone,
       email: userResult.email,
+      urlImage: gateStaff.urlImage || null,
       isActive: gateStaff.isActive,
       createdAt: gateStaff.createdAt,
       updatedAt: gateStaff.updatedAt

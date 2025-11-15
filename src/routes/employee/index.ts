@@ -13,6 +13,7 @@ interface IEmployeeRequest extends express.Request {
     phone: string;
     roleId: string;
     email: string;
+    urlImage?: string;
   };
 }
 
@@ -67,6 +68,7 @@ employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express
         email: firebaseUser?.email || null,
         roleId: (emp.roleId as any)?._id || null,
         roleName: (emp.roleId as any)?.roleName || null,
+        urlImage: emp.urlImage || null,
         isActive: emp.isActive,
         createdAt: emp.createdAt,
         updatedAt: emp.updatedAt
@@ -122,6 +124,7 @@ employeeRouter.get('/me', async (req: express.Request, res: express.Response): P
       email: (req as any)?.userRecord?.email || null,
       roleId: (employee.roleId as any)?._id || null,
       roleName: (employee.roleId as any)?.roleName || null,
+      urlImage: employee.urlImage || null,
       isActive: employee.isActive,
       createdAt: employee.createdAt,
       updatedAt: employee.updatedAt
@@ -163,6 +166,7 @@ employeeRouter.get('/:id', adminAuth, async (req: express.Request, res: express.
       email: firebaseUser?.email || null,
       roleId: (employee.roleId as any)?._id || null,
       roleName: (employee.roleId as any)?.roleName || null,
+      urlImage: employee.urlImage || null,
       isActive: employee.isActive,
       createdAt: employee.createdAt,
       updatedAt: employee.updatedAt
@@ -181,7 +185,7 @@ employeeRouter.get('/:id', adminAuth, async (req: express.Request, res: express.
 //POST /employee - Create a new employee with Firebase user
 employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.Response): Promise<void> => {
   try {
-    const { fullName, phone, roleId, email } = req.body;
+    const { fullName, phone, roleId, email, urlImage } = req.body;
 
     // Validate required fields
     if (!fullName || !phone || !roleId || !email) {
@@ -230,7 +234,8 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
         uid: userResult.uid,
         fullName,
         phone,
-        roleId: new mongoose.Types.ObjectId(roleId)
+        roleId: new mongoose.Types.ObjectId(roleId),
+        urlImage: urlImage || undefined
       });
     } catch (createError) {
       console.error('Error creating employee in MongoDB:', createError);
@@ -249,6 +254,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
       email: userResult.email,
       roleId: (employeeWithRole?.roleId as any)?._id || null,
       roleName: (employeeWithRole?.roleId as any)?.roleName || null,
+      urlImage: employeeWithRole?.urlImage || null,
       isActive: employeeWithRole?.isActive,
       createdAt: employeeWithRole?.createdAt,
       updatedAt: employeeWithRole?.updatedAt

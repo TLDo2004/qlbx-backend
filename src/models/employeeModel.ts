@@ -6,6 +6,7 @@ export interface IEmployee extends Document {
     fullName: string;
     phone: string;
     roleId: mongoose.Schema.Types.ObjectId;
+    urlImage?: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -30,6 +31,10 @@ const EmployeeSchema = new Schema<IEmployee>({
         type: mongoose.Schema.Types.ObjectId,
         required: true,
         ref: 'role'
+    },
+    urlImage: {
+        type: String,
+        required: false
     },
     isActive: {
         type: Boolean,
