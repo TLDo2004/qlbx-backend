@@ -4,6 +4,7 @@ import { internalError } from '../../utils/index';
 import { GateStaff } from '../../models/gateStaffModel';
 import anprRouter from './anpr';
 import rfidRouter from './rfidReader';
+import videoStreamRouter from './videoStream';
 import multer from 'multer';
 import { uploadBufferToCloudinary } from '../../utils/cloudinary';
 
@@ -209,5 +210,8 @@ gateStaffRouter.use('/anpr', anprRouter);
 
 // Use RFID reader routes
 gateStaffRouter.use('/rfid', rfidRouter);
+
+// Use video stream routes
+gateStaffRouter.use('/video-stream', videoStreamRouter);
 
 export default gateStaffRouter;

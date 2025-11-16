@@ -246,6 +246,7 @@ class EventMergerService {
         
         console.log(`Merged Camera event ${cameraEvent.license_plate} with RFID event ${bestMatch.license_plate}`);
       }
+      // If no matching RFID events found, wait for expiration to allow time for RFID events to arrive
     } catch (error) {
       console.error(`Error processing Camera event ${cameraEvent.license_plate}:`, error);
     }
