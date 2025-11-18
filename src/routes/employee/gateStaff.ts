@@ -1,9 +1,103 @@
 import express from 'express';
 import { GateStaff } from '../../models';
-import { createUserAndSendWelcomeEmail } from '../../services/_firebaseservice';
+import { createUserAndSendWelcomeEmail, getFirebaseUserByUid } from '../../services/_firebaseservice';
 import { adminAuth } from '../../middleware';
+import { internalError } from '../../utils';
 
 const gateStaffRouter = express.Router();
+
+//GET /employee/gate-staff/list - Get all gate staff with pagination, search, and filter
+gateStaffRouter.get('/list', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    // Parse pagination parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const search = req.query.search as string || '';
+    const status = req.query.status as string || 'all'; // 'all', 'active', 'inactive'
+
+    // Validate pagination parameters
+    if (page < 1) {
+      res.status(400).json({
+        success: false,
+        error: 'Số trang phải lớn hơn 0'
+      });
+      return;
+    }
+
+    if (limit < 1 || limit > 100) {
+      res.status(400).json({
+        success: false,
+        error: 'Giới hạn phải từ 1 đến 100'
+      });
+      return;
+    }
+
+    // Calculate skip value
+    const skip = (page - 1) * limit;
+
+    // Build filter query
+    const filter: any = {};
+
+    // Filter by status
+    if (status === 'active') {
+      filter.isActive = true;
+    } else if (status === 'inactive') {
+      filter.isActive = false;
+    }
+    // If status is 'all', don't add isActive filter
+
+    // Filter by search term (search in fullName, phone)
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      filter.$or = [
+        { fullName: searchRegex },
+        { phone: searchRegex }
+      ];
+    }
+
+    // Get total count for pagination info
+    const totalGateStaff = await GateStaff.countDocuments(filter);
+    const totalPages = Math.ceil(totalGateStaff / limit);
+
+    // Get gate staff with pagination
+    const gateStaffList = await GateStaff.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Transform data to include email from Firebase
+    const transformedGateStaff = await Promise.all(gateStaffList.map(async (gs) => {
+      const firebaseUser = await getFirebaseUserByUid(gs.uid);
+      return {
+        _id: gs._id,
+        uid: gs.uid,
+        fullName: gs.fullName,
+        phone: gs.phone,
+        email: firebaseUser?.email || null,
+        urlImage: gs.urlImage || null,
+        isActive: gs.isActive,
+        createdAt: gs.createdAt,
+        updatedAt: gs.updatedAt
+      };
+    }));
+
+    res.json({
+      success: true,
+      data: transformedGateStaff,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalItems: totalGateStaff,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching gate staff:', error);
+    internalError(res, 'Không thể lấy danh sách nhân viên cổng');
+  }
+});
 
 //POST /employee/gateStaff - create a new gate staff
 gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
