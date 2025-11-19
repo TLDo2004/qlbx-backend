@@ -11,5 +11,4 @@ export { BusCompany } from './busCompanyModel';
 export { Route } from './routeModel';
 export { Fee } from './feeModel';
 export { FeeRecord } from './feeRecordModel';
-export { Account } from './accountModel';
 export { Transaction, TransactionType, TransactionSource } from './transactionModel';

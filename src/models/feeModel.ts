@@ -1,8 +1,13 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import { VehicleType } from './vehicleModel';
 
+export enum FeeType {
+    PASSING = 'passing',
+    PARKING = 'parking'
+}
+
 export interface IFee extends Document {
-    fee_type: string;
+    fee_type: FeeType;
     fee_name: string;
     vehicle_type?: VehicleType;
     amount: number;
@@ -14,7 +19,8 @@ const FeeSchema = new Schema<IFee>({
     fee_type: {
         type: String,
         required: true,
-        trim: true
+        trim: true,
+        enum: Object.values(FeeType)
     },
     fee_name: {
         type: String,
@@ -37,20 +43,7 @@ const FeeSchema = new Schema<IFee>({
     collection: 'fee'
 });
 
-FeeSchema.index(
-    { fee_type: 1, vehicle_type: 1 },
-    {
-        unique: true,
-        partialFilterExpression: { vehicle_type: { $exists: true } }
-    }
-);
-FeeSchema.index(
-    { fee_type: 1 },
-    {
-        unique: true,
-        partialFilterExpression: { vehicle_type: { $exists: false } }
-    }
-);
+FeeSchema.index({ fee_type: 1, vehicle_type: 1 }, { unique: true });
 
 export const Fee = mongoose.model<IFee>('fee', FeeSchema, 'fee');
 

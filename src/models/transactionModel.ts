@@ -13,12 +13,13 @@ export enum TransactionSource {
 }
 
 export interface ITransaction extends Document {
-    account_id: mongoose.Schema.Types.ObjectId;
+    rfid_etc_id: mongoose.Schema.Types.ObjectId;
     amount: number;
     type: TransactionType;
     source: TransactionSource;
     reference_code?: string;
     perform_by?: mongoose.Schema.Types.ObjectId;
+    note?: string;
     balance_before: number;
     balance_after: number;
     createdAt: Date;
@@ -26,9 +27,9 @@ export interface ITransaction extends Document {
 }
 
 const TransactionSchema = new Schema<ITransaction>({
-    account_id: {
+    rfid_etc_id: {
         type: Schema.Types.ObjectId,
-        ref: 'account',
+        ref: 'rfid_etc',
         required: true
     },
     amount: {
@@ -54,6 +55,11 @@ const TransactionSchema = new Schema<ITransaction>({
         type: Schema.Types.ObjectId,
         ref: 'employee'
     },
+    note: {
+        type: String,
+        trim: true,
+        maxlength: 2000
+    },
     balance_before: {
         type: Number,
         required: true
@@ -68,7 +74,7 @@ const TransactionSchema = new Schema<ITransaction>({
     collection: 'transaction'
 });
 
-TransactionSchema.index({ account_id: 1, createdAt: -1 });
+TransactionSchema.index({ rfid_etc_id: 1, createdAt: -1 });
 TransactionSchema.index({ reference_code: 1 }, { sparse: true, unique: true });
 
 export const Transaction = mongoose.model<ITransaction>('transaction', TransactionSchema, 'transaction');

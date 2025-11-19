@@ -11,6 +11,8 @@ export interface IRfidEtc extends Document {
     rfid_etc: string;
     expiration_date: Date;
     status: RfidEtcStatus;
+    balance: number;
+    is_active: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -32,6 +34,16 @@ const RfidEtcSchema = new Schema<IRfidEtc>({
         required: true,
         enum: Object.values(RfidEtcStatus),
         default: RfidEtcStatus.ACTIVE
+    },
+    balance: {
+        type: Number,
+        required: true,
+        default: 0,
+        min: 0
+    },
+    is_active: {
+        type: Boolean,
+        default: true
     }
 }, {
     timestamps: true,

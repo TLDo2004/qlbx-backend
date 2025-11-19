@@ -1,6 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { FeeRecord } from '../models';
+import { Fee, FeeRecord } from '../models';
 import { internalError } from '../utils';
 
 const feeRecordRouter = express.Router();
@@ -15,6 +15,7 @@ feeRecordRouter.get('/', async (_req, res) => {
             .populate('vehicle_id')
             .populate('event_id')
             .populate('fee_id')
+            .populate('transaction_id')
             .sort({ timestamp: -1 });
 
         res.json({
@@ -43,7 +44,8 @@ feeRecordRouter.get('/:id', async (req, res) => {
         const feeRecord = await FeeRecord.findById(id)
             .populate('vehicle_id')
             .populate('event_id')
-            .populate('fee_id');
+            .populate('fee_id')
+            .populate('transaction_id');
 
         if (!feeRecord) {
             res.status(404).json({
@@ -70,16 +72,18 @@ feeRecordRouter.post('/', async (req, res) => {
             vehicle_id,
             event_id,
             fee_id,
+            transaction_id,
             timestamp,
             amount,
             is_paid = false,
-            paid_at
+            paid_at,
+            parking_time
         } = req.body;
 
-        if (!vehicle_id || !fee_id || amount === undefined) {
+        if (!vehicle_id || !fee_id) {
             res.status(400).json({
                 success: false,
-                error: 'Thiếu trường bắt buộc: vehicle_id, fee_id, amount'
+                error: 'Thiếu trường bắt buộc: vehicle_id, fee_id'
             });
             return;
         }
@@ -100,17 +104,63 @@ feeRecordRouter.post('/', async (req, res) => {
             return;
         }
 
+        if (transaction_id && !isValidObjectId(transaction_id)) {
+            res.status(400).json({
+                success: false,
+                error: 'transaction_id không hợp lệ'
+            });
+            return;
+        }
+
+        const fee = await Fee.findById(fee_id);
+
+        if (!fee) {
+            res.status(404).json({
+                success: false,
+                error: 'Không tìm thấy biểu phí'
+            });
+            return;
+        }
+
+        const resolvedAmount = amount !== undefined ? amount : fee.amount;
+
+        if (resolvedAmount === undefined) {
+            res.status(400).json({
+                success: false,
+                error: 'Không xác định được số tiền cho giao dịch phí'
+            });
+            return;
+        }
+
+        if (resolvedAmount < 0) {
+            res.status(400).json({
+                success: false,
+                error: 'amount phải >= 0'
+            });
+            return;
+        }
+
+        if (parking_time !== undefined && parking_time < 0) {
+            res.status(400).json({
+                success: false,
+                error: 'parking_time phải >= 0'
+            });
+            return;
+        }
+
         const newFeeRecord = await FeeRecord.create({
             vehicle_id,
             event_id: event_id || undefined,
             fee_id,
+            transaction_id: transaction_id || undefined,
             timestamp: timestamp ? new Date(timestamp) : undefined,
-            amount,
+            amount: resolvedAmount,
             is_paid,
-            paid_at: paid_at ? new Date(paid_at) : undefined
+            paid_at: paid_at ? new Date(paid_at) : undefined,
+            parking_time: parking_time !== undefined ? parking_time : undefined
         });
 
-        const populated = await newFeeRecord.populate(['vehicle_id', 'event_id', 'fee_id']);
+        const populated = await newFeeRecord.populate(['vehicle_id', 'event_id', 'fee_id', 'transaction_id']);
 
         res.status(201).json({
             success: true,
@@ -136,11 +186,11 @@ feeRecordRouter.put('/:id', async (req, res) => {
         }
 
         const payload: any = {};
-        const updatableFields = ['vehicle_id', 'event_id', 'fee_id', 'timestamp', 'amount', 'is_paid', 'paid_at'];
+        const updatableFields = ['vehicle_id', 'event_id', 'fee_id', 'transaction_id', 'timestamp', 'amount', 'is_paid', 'paid_at', 'parking_time'];
 
         for (const field of updatableFields) {
             if (req.body[field] !== undefined) {
-                if (['vehicle_id', 'event_id', 'fee_id'].includes(field)) {
+                if (['vehicle_id', 'event_id', 'fee_id', 'transaction_id'].includes(field)) {
                     if (!isValidObjectId(req.body[field])) {
                         res.status(400).json({
                             success: false,
@@ -151,6 +201,15 @@ feeRecordRouter.put('/:id', async (req, res) => {
                     payload[field] = req.body[field];
                 } else if (['timestamp', 'paid_at'].includes(field)) {
                     payload[field] = req.body[field] ? new Date(req.body[field]) : undefined;
+                } else if (field === 'parking_time') {
+                    if (req.body[field] < 0) {
+                        res.status(400).json({
+                            success: false,
+                            error: 'parking_time phải >= 0'
+                        });
+                        return;
+                    }
+                    payload[field] = req.body[field];
                 } else {
                     payload[field] = req.body[field];
                 }
@@ -169,7 +228,7 @@ feeRecordRouter.put('/:id', async (req, res) => {
             id,
             { $set: payload },
             { new: true, runValidators: true }
-        ).populate(['vehicle_id', 'event_id', 'fee_id']);
+        ).populate(['vehicle_id', 'event_id', 'fee_id', 'transaction_id']);
 
         if (!updatedFeeRecord) {
             res.status(404).json({

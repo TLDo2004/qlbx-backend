@@ -1,14 +1,75 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import { Fee } from '../models';
+import { FeeType } from '../models/feeModel';
+import { VehicleType } from '../models/vehicleModel';
 import { internalError } from '../utils';
 
 const feeRouter = express.Router();
 
+const feeTypeSet = new Set(Object.values(FeeType));
+const vehicleTypeSet = new Set(Object.values(VehicleType));
+
+const normalizeEnumValue = <T extends string>(value: any, valueSet: Set<T>) => {
+    if (value === undefined) {
+        return { provided: false as const };
+    }
+
+    if (value === null) {
+        return { provided: true as const, value: undefined };
+    }
+
+    const normalized = String(value).trim().toLowerCase() as T;
+
+    if (!normalized) {
+        return { provided: true as const, value: undefined };
+    }
+
+    if (!valueSet.has(normalized)) {
+        return { provided: true as const, invalid: true as const };
+    }
+
+    return { provided: true as const, value: normalized };
+};
+
+const normalizeFeeType = (value: any) => normalizeEnumValue<FeeType>(value, feeTypeSet);
+const normalizeVehicleType = (value: any) => normalizeEnumValue<VehicleType>(value, vehicleTypeSet);
+
 // GET /fee - list all fees
-feeRouter.get('/', async (_req, res) => {
+feeRouter.get('/', async (req, res) => {
     try {
-        const fees = await Fee.find().sort({ fee_type: 1, vehicle_type: 1 });
+        const { fee_type: feeTypeQuery, vehicle_type: vehicleTypeQuery } = req.query;
+        const filters: any = {};
+
+        if (feeTypeQuery !== undefined) {
+            const parsedFeeType = normalizeFeeType(feeTypeQuery);
+
+            if (parsedFeeType.invalid || !parsedFeeType.value) {
+                res.status(400).json({
+                    success: false,
+                    error: 'fee_type không hợp lệ'
+                });
+                return;
+            }
+
+            filters.fee_type = parsedFeeType.value;
+        }
+
+        if (vehicleTypeQuery !== undefined) {
+            const parsedVehicleType = normalizeVehicleType(vehicleTypeQuery);
+
+            if (parsedVehicleType.invalid) {
+                res.status(400).json({
+                    success: false,
+                    error: 'vehicle_type không hợp lệ'
+                });
+                return;
+            }
+
+            filters.vehicle_type = parsedVehicleType.value ?? { $exists: false };
+        }
+
+        const fees = await Fee.find(filters).sort({ fee_type: 1, vehicle_type: 1 });
         res.json({
             success: true,
             data: fees
@@ -24,15 +85,39 @@ feeRouter.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            res.status(400).json({
-                success: false,
-                error: 'ID không hợp lệ'
-            });
-            return;
-        }
+        let fee = null;
 
-        const fee = await Fee.findById(id);
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            fee = await Fee.findById(id);
+        } else {
+            const parsedFeeType = normalizeFeeType(id);
+
+            if (parsedFeeType.invalid || !parsedFeeType.value) {
+                res.status(400).json({
+                    success: false,
+                    error: 'ID hoặc fee_type không hợp lệ'
+                });
+                return;
+            }
+
+            const filters: any = { fee_type: parsedFeeType.value };
+
+            if (req.query.vehicle_type !== undefined) {
+                const parsedVehicleType = normalizeVehicleType(req.query.vehicle_type);
+
+                if (parsedVehicleType.invalid) {
+                    res.status(400).json({
+                        success: false,
+                        error: 'vehicle_type không hợp lệ'
+                    });
+                    return;
+                }
+
+                filters.vehicle_type = parsedVehicleType.value ?? { $exists: false };
+            }
+
+            fee = await Fee.findOne(filters);
+        }
 
         if (!fee) {
             res.status(404).json({
@@ -57,7 +142,7 @@ feeRouter.post('/', async (req, res) => {
     try {
         const { fee_type, fee_name, vehicle_type, amount } = req.body;
 
-        if (!fee_type || !fee_name || amount === undefined) {
+        if (fee_type === undefined || !fee_name || amount === undefined) {
             res.status(400).json({
                 success: false,
                 error: 'Thiếu trường bắt buộc: fee_type, fee_name, amount'
@@ -65,10 +150,44 @@ feeRouter.post('/', async (req, res) => {
             return;
         }
 
+        const parsedFeeType = normalizeFeeType(fee_type);
+
+        if (!parsedFeeType.value || parsedFeeType.invalid) {
+            res.status(400).json({
+                success: false,
+                error: 'fee_type không hợp lệ'
+            });
+            return;
+        }
+
+        if (amount < 0) {
+            res.status(400).json({
+                success: false,
+                error: 'amount phải >= 0'
+            });
+            return;
+        }
+
+        let vehicleTypeValue: VehicleType | undefined;
+
+        if (vehicle_type !== undefined) {
+            const parsedVehicleType = normalizeVehicleType(vehicle_type);
+
+            if (parsedVehicleType.invalid) {
+                res.status(400).json({
+                    success: false,
+                    error: 'vehicle_type không hợp lệ'
+                });
+                return;
+            }
+
+            vehicleTypeValue = parsedVehicleType.value;
+        }
+
         const newFee = await Fee.create({
-            fee_type,
-            fee_name,
-            vehicle_type,
+            fee_type: parsedFeeType.value,
+            fee_name: String(fee_name).trim(),
+            ...(vehicleTypeValue !== undefined ? { vehicle_type: vehicleTypeValue } : {}),
             amount
         });
 
@@ -104,16 +223,70 @@ feeRouter.put('/:id', async (req, res) => {
             return;
         }
 
-        const payload: any = {};
-        const updatableFields = ['fee_type', 'fee_name', 'vehicle_type', 'amount'];
+        const setPayload: any = {};
+        const unsetPayload: any = {};
 
-        updatableFields.forEach((field) => {
-            if (req.body[field] !== undefined) {
-                payload[field] = req.body[field];
+        if (req.body.fee_type !== undefined) {
+            const parsedFeeType = normalizeFeeType(req.body.fee_type);
+
+            if (parsedFeeType.invalid || !parsedFeeType.value) {
+                res.status(400).json({
+                    success: false,
+                    error: 'fee_type không hợp lệ'
+                });
+                return;
             }
-        });
 
-        if (Object.keys(payload).length === 0) {
+            setPayload.fee_type = parsedFeeType.value;
+        }
+
+        if (req.body.fee_name !== undefined) {
+            const trimmedName = String(req.body.fee_name).trim();
+
+            if (!trimmedName) {
+                res.status(400).json({
+                    success: false,
+                    error: 'fee_name không được để trống'
+                });
+                return;
+            }
+
+            setPayload.fee_name = trimmedName;
+        }
+
+        if (req.body.amount !== undefined) {
+            const parsedAmount = Number(req.body.amount);
+
+            if (Number.isNaN(parsedAmount) || parsedAmount < 0) {
+                res.status(400).json({
+                    success: false,
+                    error: 'amount phải là số >= 0'
+                });
+                return;
+            }
+
+            setPayload.amount = parsedAmount;
+        }
+
+        if (req.body.vehicle_type !== undefined) {
+            const parsedVehicleType = normalizeVehicleType(req.body.vehicle_type);
+
+            if (parsedVehicleType.invalid) {
+                res.status(400).json({
+                    success: false,
+                    error: 'vehicle_type không hợp lệ'
+                });
+                return;
+            }
+
+            if (parsedVehicleType.value) {
+                setPayload.vehicle_type = parsedVehicleType.value;
+            } else {
+                unsetPayload.vehicle_type = '';
+            }
+        }
+
+        if (!Object.keys(setPayload).length && !Object.keys(unsetPayload).length) {
             res.status(400).json({
                 success: false,
                 error: 'Không có dữ liệu để cập nhật'
@@ -121,9 +294,19 @@ feeRouter.put('/:id', async (req, res) => {
             return;
         }
 
+        const updateOps: any = {};
+
+        if (Object.keys(setPayload).length) {
+            updateOps.$set = setPayload;
+        }
+
+        if (Object.keys(unsetPayload).length) {
+            updateOps.$unset = unsetPayload;
+        }
+
         const updatedFee = await Fee.findByIdAndUpdate(
             id,
-            { $set: payload },
+            updateOps,
             { new: true, runValidators: true }
         );
 
@@ -158,16 +341,39 @@ feeRouter.put('/:id', async (req, res) => {
 feeRouter.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        let deleted = null;
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            res.status(400).json({
-                success: false,
-                error: 'ID không hợp lệ'
-            });
-            return;
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            deleted = await Fee.findByIdAndDelete(id);
+        } else {
+            const parsedFeeType = normalizeFeeType(id);
+
+            if (parsedFeeType.invalid || !parsedFeeType.value) {
+                res.status(400).json({
+                    success: false,
+                    error: 'ID hoặc fee_type không hợp lệ'
+                });
+                return;
+            }
+
+            const filters: any = { fee_type: parsedFeeType.value };
+
+            if (req.query.vehicle_type !== undefined) {
+                const parsedVehicleType = normalizeVehicleType(req.query.vehicle_type);
+
+                if (parsedVehicleType.invalid) {
+                    res.status(400).json({
+                        success: false,
+                        error: 'vehicle_type không hợp lệ'
+                    });
+                    return;
+                }
+
+                filters.vehicle_type = parsedVehicleType.value ?? { $exists: false };
+            }
+
+            deleted = await Fee.findOneAndDelete(filters);
         }
-
-        const deleted = await Fee.findByIdAndDelete(id);
 
         if (!deleted) {
             res.status(404).json({

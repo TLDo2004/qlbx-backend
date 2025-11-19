@@ -7,6 +7,8 @@ interface IRfidEtcRequest extends express.Request {
     rfid_etc: string;
     expiration_date: string;
     status?: RfidEtcStatus;
+    balance?: number;
+    is_active?: boolean;
   };
 }
 
@@ -101,6 +103,8 @@ rfidEtcRouter.get('/:rfid_etc', async (req: express.Request, res: express.Respon
         rfid_etc: rfidEtc.rfid_etc,
         expiration_date: rfidEtc.expiration_date,
         status: rfidEtc.status,
+        balance: rfidEtc.balance,
+        is_active: rfidEtc.is_active,
         createdAt: rfidEtc.createdAt,
         updatedAt: rfidEtc.updatedAt
       }
@@ -114,7 +118,7 @@ rfidEtcRouter.get('/:rfid_etc', async (req: express.Request, res: express.Respon
 // POST /rfid-etc - Create a new RFID/ETC
 rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Promise<void> => {
   try {
-    const { rfid_etc, expiration_date, status } = req.body;
+    const { rfid_etc, expiration_date, status, balance, is_active } = req.body;
 
     // Validate required fields
     if (!rfid_etc || !expiration_date) {
@@ -132,6 +136,18 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
         error: `Trạng thái không hợp lệ. Phải là một trong: ${Object.values(RfidEtcStatus).join(', ')}`
       });
       return;
+    }
+
+    // Validate balance if provided
+    if (balance !== undefined) {
+      const balanceNum = Number(balance);
+      if (isNaN(balanceNum) || balanceNum < 0) {
+        res.status(400).json({
+          success: false,
+          error: 'balance phải là số >= 0'
+        });
+        return;
+      }
     }
 
     // Validate expiration_date format
@@ -168,6 +184,16 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
       rfidEtcData.status = status;
     }
 
+    // Add balance if provided
+    if (balance !== undefined) {
+      rfidEtcData.balance = Number(balance);
+    }
+
+    // Add is_active if provided
+    if (is_active !== undefined) {
+      rfidEtcData.is_active = Boolean(is_active);
+    }
+
     // Create the RFID/ETC
     const rfidEtc = await RfidEtc.create(rfidEtcData);
 
@@ -179,6 +205,8 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
         rfid_etc: rfidEtc.rfid_etc,
         expiration_date: rfidEtc.expiration_date,
         status: rfidEtc.status,
+        balance: rfidEtc.balance,
+        is_active: rfidEtc.is_active,
         createdAt: rfidEtc.createdAt,
         updatedAt: rfidEtc.updatedAt
       }
@@ -214,7 +242,7 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
 rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { rfid_etc } = req.params;
-    const { expiration_date, status } = req.body;
+    const { expiration_date, status, balance, is_active } = req.body;
 
     // Validate rfid_etc parameter
     if (!rfid_etc || rfid_etc.trim() === '') {
@@ -247,6 +275,18 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
       return;
     }
 
+    // Validate balance if provided
+    if (balance !== undefined) {
+      const balanceNum = Number(balance);
+      if (isNaN(balanceNum) || balanceNum < 0) {
+        res.status(400).json({
+          success: false,
+          error: 'balance phải là số >= 0'
+        });
+        return;
+      }
+    }
+
     // Validate expiration_date if provided
     let expirationDate = null;
     if (expiration_date) {
@@ -264,6 +304,8 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
     const updateData: any = {};
     if (expiration_date !== undefined) updateData.expiration_date = expirationDate;
     if (status !== undefined) updateData.status = status;
+    if (balance !== undefined) updateData.balance = Number(balance);
+    if (is_active !== undefined) updateData.is_active = Boolean(is_active);
 
     // Update the RFID/ETC
     const updatedRfidEtc = await RfidEtc.findByIdAndUpdate(
@@ -280,6 +322,8 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
         rfid_etc: updatedRfidEtc?.rfid_etc,
         expiration_date: updatedRfidEtc?.expiration_date,
         status: updatedRfidEtc?.status,
+        balance: updatedRfidEtc?.balance,
+        is_active: updatedRfidEtc?.is_active,
         createdAt: updatedRfidEtc?.createdAt,
         updatedAt: updatedRfidEtc?.updatedAt
       }
