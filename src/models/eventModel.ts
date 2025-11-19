@@ -39,7 +39,7 @@ export interface IEvent extends Document {
     
     // Vehicle info (from license_plate lookup)
     license_plate: string;
-    vehicle_id?: string; // Reference to vehicle document
+    vehicle_id?: mongoose.Schema.Types.ObjectId; // Reference to vehicle document
     
     // Gate info
     gateId: string;
@@ -83,7 +83,7 @@ const EventSchema = new Schema<IEvent>({
         index: true
     },
     vehicle_id: {
-        type: String,
+        type: Schema.Types.ObjectId,
         ref: 'vehicle',
         required: false
     },
