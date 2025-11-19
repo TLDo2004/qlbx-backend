@@ -118,13 +118,24 @@ videoStreamRouter.get('/hls/:filename', gateStaffAuth, (req: express.Request, re
       return;
     }
 
-    // Set appropriate headers
+    // Set appropriate headers with cache busting for live streaming
     if (filename.endsWith('.m3u8')) {
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      // Add ETag based on file modification time to force refresh
+      try {
+        const stats = fs.statSync(filePath);
+        const etag = `"${stats.mtime.getTime()}"`;
+        res.setHeader('ETag', etag);
+      } catch (e) {
+        // Ignore if stats fail
+      }
     } else if (filename.endsWith('.ts')) {
       res.setHeader('Content-Type', 'video/mp2t');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
+      // Segments can be cached briefly but not too long for live streaming
+      res.setHeader('Cache-Control', 'public, max-age=10');
     }
 
     // Send file
