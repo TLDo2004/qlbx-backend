@@ -6,6 +6,8 @@ import mongoose from 'mongoose';
 import { createUserAndSendWelcomeEmail, getFirebaseUserByUid } from '../../services/_firebaseservice';
 import gateStaffRouter from './gateStaff';
 import roleRouter from './role';
+import busCompanyRouter from './busCompany';
+import routeRouter from './route';
 
 interface IEmployeeRequest extends express.Request {
   body: {
@@ -374,5 +376,7 @@ employeeRouter.post('/', adminAuth, async (req: IEmployeeRequest, res: express.R
 // Use gate staff 
 employeeRouter.use('/gate-staff', gateStaffRouter);
 employeeRouter.use('/role', adminAuth, roleRouter);
+employeeRouter.use('/bus-company', adminAuth, busCompanyRouter);
+employeeRouter.use('/route', adminAuth, routeRouter);
 
 export default employeeRouter;

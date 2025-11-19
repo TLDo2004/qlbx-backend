@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import { Vehicle, VehicleType, VehicleGateStatus } from '../models';
 import { internalError } from '../utils';
 
@@ -14,6 +15,7 @@ interface IVehicleRequest extends express.Request {
 }
 
 const vehicleRouter = express.Router();
+const isValidObjectId = (id: string) => mongoose.Types.ObjectId.isValid(id);
 
 // GET /vehicle - Get all vehicles with pagination
 vehicleRouter.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
@@ -201,7 +203,16 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     // Add optional fields if provided
     if (vehicle_group) vehicleData.vehicle_group = vehicle_group.trim();
     if (vehicle_type) vehicleData.vehicle_type = vehicle_type;
-    if (company) vehicleData.company = company.trim();
+    if (company) {
+      if (!isValidObjectId(company)) {
+        res.status(400).json({
+          success: false,
+          error: 'company phải là ID hợp lệ của bus company'
+        });
+        return;
+      }
+      vehicleData.company = new mongoose.Types.ObjectId(company);
+    }
     if (rfid_etc) vehicleData.rfid_etc = rfid_etc.trim();
 
     // Create the vehicle
@@ -215,7 +226,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
         license_plate: vehicle.license_plate,
         vehicle_group: vehicle.vehicle_group,
         vehicle_type: vehicle.vehicle_type,
-        company: vehicle.company,
+        company: vehicle.company ? vehicle.company.toString() : null,
         rfid_etc: vehicle.rfid_etc,
         gate: vehicle.gate,
         createdAt: vehicle.createdAt,
@@ -331,7 +342,19 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     const updateData: any = {};
     if (vehicle_group !== undefined) updateData.vehicle_group = vehicle_group.trim();
     if (vehicle_type !== undefined) updateData.vehicle_type = vehicle_type;
-    if (company !== undefined) updateData.company = company.trim();
+    if (company !== undefined) {
+      if (company === null || company === '') {
+        updateData.company = null;
+      } else if (!isValidObjectId(company)) {
+        res.status(400).json({
+          success: false,
+          error: 'company phải là ID hợp lệ của bus company'
+        });
+        return;
+      } else {
+        updateData.company = new mongoose.Types.ObjectId(company);
+      }
+    }
     if (rfid_etc !== undefined) updateData.rfid_etc = rfid_etc.trim();
     if (gate !== undefined) updateData.gate = gate;
 
@@ -350,7 +373,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
         license_plate: updatedVehicle?.license_plate,
         vehicle_group: updatedVehicle?.vehicle_group,
         vehicle_type: updatedVehicle?.vehicle_type,
-        company: updatedVehicle?.company,
+        company: updatedVehicle?.company ? updatedVehicle.company.toString() : null,
         rfid_etc: updatedVehicle?.rfid_etc,
         gate: updatedVehicle?.gate,
         createdAt: updatedVehicle?.createdAt,
