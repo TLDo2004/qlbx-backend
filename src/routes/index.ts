@@ -9,7 +9,6 @@ import eventRouter from './event';
 import eventMergerRouter from './eventMerger';
 import feeRouter from './fee';
 import feeRecordRouter from './feeRecord';
-import accountRouter from './account';
 import transactionRouter from './transaction';
 
 
@@ -25,7 +24,6 @@ router.use('/event', auth, gateStaffAuth, eventRouter);
 router.use('/event-merger', auth, gateStaffAuth, eventMergerRouter);
 router.use('/fee', auth, feeRouter);
 router.use('/fee-record', auth, feeRecordRouter);
-router.use('/account', auth, accountRouter);
 router.use('/transaction', auth, transactionRouter);
 
 export default router;

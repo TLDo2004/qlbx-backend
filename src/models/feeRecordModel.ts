@@ -4,10 +4,12 @@ export interface IFeeRecord extends Document {
     vehicle_id: mongoose.Schema.Types.ObjectId;
     event_id?: mongoose.Schema.Types.ObjectId;
     fee_id: mongoose.Schema.Types.ObjectId;
+    transaction_id?: mongoose.Schema.Types.ObjectId;
     timestamp: Date;
     amount: number;
     is_paid: boolean;
     paid_at?: Date;
+    parking_time?: number; // Thời gian đỗ xe (phút)
     createdAt: Date;
     updatedAt: Date;
 }
@@ -28,6 +30,11 @@ const FeeRecordSchema = new Schema<IFeeRecord>({
         ref: 'fee',
         required: true
     },
+    transaction_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'transaction',
+        required: false
+    },
     timestamp: {
         type: Date,
         required: true,
@@ -44,6 +51,11 @@ const FeeRecordSchema = new Schema<IFeeRecord>({
     },
     paid_at: {
         type: Date
+    },
+    parking_time: {
+        type: Number,
+        required: false,
+        min: 0
     }
 }, {
     timestamps: true,

@@ -4,7 +4,19 @@
  */
 
 import express from 'express';
-import { Event, EventType, EventStatus } from '../models';
+import {
+  Event,
+  EventType,
+  EventStatus,
+  Fee,
+  FeeRecord,
+  RfidEtc,
+  Transaction,
+  TransactionSource,
+  TransactionType,
+  Vehicle
+} from '../models';
+import { FeeType } from '../models/feeModel';
 import { gateStaffAuth } from '../middleware';
 import { internalError, badRequest, success, notFound, created } from '../utils';
 
@@ -173,13 +185,127 @@ eventRouter.post('/', gateStaffAuth, async (req: IEventRequest, res: express.Res
       resolvedTimestamp = new Date(cameraEvent.timestamp);
     }
 
+    const normalizedPlate = license_plate.trim().toUpperCase();
+    const isGateIn = gateId.toLowerCase() === 'gate_in';
+    const isGateOut = gateId.toLowerCase() === 'gate_out';
+
+    let linkedVehicle = await Vehicle.findOne({ license_plate: normalizedPlate });
+    let applicableFee = null;
+    let linkedRfidEtc = null;
+
+    if (!linkedVehicle) {
+      linkedVehicle = await Vehicle.findOne({ rfid_etc: rfidEvent?.rfid_etc });
+    }
+
+    if (linkedVehicle && !linkedVehicle.license_plate) {
+      linkedVehicle.license_plate = normalizedPlate;
+    }
+
+    if (isGateIn) {
+      if (!linkedVehicle) {
+        badRequest(res, 'Không tìm thấy phương tiện tương ứng với sự kiện gate_in');
+        return;
+      }
+
+      const feeFilter: any = { fee_type: FeeType.PASSING };
+      if (linkedVehicle.vehicle_type) {
+        feeFilter.vehicle_type = linkedVehicle.vehicle_type;
+      } else {
+        feeFilter.vehicle_type = { $exists: false };
+      }
+
+      applicableFee = await Fee.findOne(feeFilter);
+
+      if (!applicableFee) {
+        badRequest(res, 'Chưa cấu hình biểu phí passing cho loại phương tiện này');
+        return;
+      }
+
+      if (linkedVehicle.rfid_etc) {
+        linkedRfidEtc = await RfidEtc.findOne({ rfid_etc: linkedVehicle.rfid_etc });
+
+        if (linkedRfidEtc) {
+          if (!linkedRfidEtc.is_active) {
+            badRequest(res, 'RFID/ETC của phương tiện đang bị khóa');
+            return;
+          }
+
+          if (linkedRfidEtc.balance < applicableFee.amount) {
+            badRequest(res, 'Số dư RFID/ETC không đủ để trừ phí');
+            return;
+          }
+        }
+      }
+    }
+
+    if (isGateOut) {
+      if (!linkedVehicle) {
+        badRequest(res, 'Không tìm thấy phương tiện tương ứng với sự kiện gate_out');
+        return;
+      }
+
+      // Tìm event gate_in mới nhất của vehicle này
+      const latestGateInEvent = await Event.findOne({
+        vehicle_id: linkedVehicle._id,
+        gateId: 'gate_in'
+      })
+        .sort({ timestamp: -1 });
+
+      if (!latestGateInEvent) {
+        badRequest(res, 'Không tìm thấy sự kiện gate_in trước đó cho phương tiện này');
+        return;
+      }
+
+      // Tính parking_time (giờ)
+      const parkingTimeInMs = resolvedTimestamp.getTime() - latestGateInEvent.timestamp.getTime();
+      const parkingTimeInHours = parkingTimeInMs / (1000 * 60 * 60);
+
+      // Tìm fee parking
+      const feeFilter: any = { fee_type: FeeType.PARKING };
+      if (linkedVehicle.vehicle_type) {
+        feeFilter.vehicle_type = linkedVehicle.vehicle_type;
+      } else {
+        feeFilter.vehicle_type = { $exists: false };
+      }
+
+      applicableFee = await Fee.findOne(feeFilter);
+
+      if (!applicableFee) {
+        badRequest(res, 'Chưa cấu hình biểu phí parking cho loại phương tiện này');
+        return;
+      }
+
+      // Tính amount = fee.amount * parking_time (giờ)
+      const calculatedAmount = applicableFee.amount * parkingTimeInHours;
+
+      if (linkedVehicle.rfid_etc) {
+        linkedRfidEtc = await RfidEtc.findOne({ rfid_etc: linkedVehicle.rfid_etc });
+
+        if (linkedRfidEtc) {
+          if (!linkedRfidEtc.is_active) {
+            badRequest(res, 'RFID/ETC của phương tiện đang bị khóa');
+            return;
+          }
+
+          if (linkedRfidEtc.balance < calculatedAmount) {
+            badRequest(res, 'Số dư RFID/ETC không đủ để trừ phí parking');
+            return;
+          }
+        }
+      }
+    }
+
     // Create event data object
     const eventData: any = {
       eventType,
-      license_plate: license_plate.toUpperCase(),
+      license_plate: normalizedPlate,
       gateId,
       timestamp: resolvedTimestamp
     };
+
+    if (linkedVehicle) {
+      eventData.vehicle_id = linkedVehicle._id;
+    }
 
     // Add optional fields
     if (rfidEvent) eventData.rfidEvent = rfidEvent;
@@ -188,10 +314,110 @@ eventRouter.post('/', gateStaffAuth, async (req: IEventRequest, res: express.Res
     // Create the event
     const event = await Event.create(eventData);
 
+    let createdFeeRecord = null;
+    let createdTransaction = null;
+
+    if (isGateIn && linkedVehicle && applicableFee) {
+      const feeRecord = await FeeRecord.create({
+        vehicle_id: linkedVehicle._id,
+        event_id: event._id,
+        fee_id: applicableFee._id,
+        timestamp: resolvedTimestamp,
+        amount: applicableFee.amount,
+        is_paid: false
+      });
+
+      if (linkedRfidEtc) {
+        const balance_before = linkedRfidEtc.balance;
+        const balance_after = balance_before - applicableFee.amount;
+        const note = `${new Date().toISOString()} passing ${applicableFee.fee_name}`;
+
+        const transaction = await Transaction.create({
+          rfid_etc_id: linkedRfidEtc._id,
+          amount: applicableFee.amount,
+          type: TransactionType.CASH_OUT,
+          source: TransactionSource.CASH,
+          balance_before,
+          balance_after,
+          note
+        });
+
+        linkedRfidEtc.balance = balance_after;
+        await linkedRfidEtc.save();
+
+        feeRecord.transaction_id = transaction._id as any;
+        feeRecord.is_paid = true;
+        feeRecord.paid_at = new Date();
+        await feeRecord.save();
+
+        createdTransaction = await transaction.populate('rfid_etc_id');
+      }
+
+      createdFeeRecord = await feeRecord.populate(['vehicle_id', 'event_id', 'fee_id', 'transaction_id']);
+    }
+
+    if (isGateOut && linkedVehicle && applicableFee) {
+      // Tìm lại event gate_in mới nhất để tính parking_time
+      const latestGateInEvent = await Event.findOne({
+        vehicle_id: linkedVehicle._id,
+        gateId: 'gate_in'
+      })
+        .sort({ timestamp: -1 });
+
+      if (latestGateInEvent) {
+        const parkingTimeInMs = resolvedTimestamp.getTime() - latestGateInEvent.timestamp.getTime();
+        const parkingTimeInHours = parkingTimeInMs / (1000 * 60 * 60);
+        const parkingTimeInMinutes = Math.round(parkingTimeInHours * 60);
+        const calculatedAmount = applicableFee.amount * parkingTimeInHours;
+
+        const feeRecord = await FeeRecord.create({
+          vehicle_id: linkedVehicle._id,
+          event_id: event._id,
+          fee_id: applicableFee._id,
+          timestamp: resolvedTimestamp,
+          amount: calculatedAmount,
+          parking_time: parkingTimeInMinutes,
+          is_paid: false
+        });
+
+        if (linkedRfidEtc) {
+          const balance_before = linkedRfidEtc.balance;
+          const balance_after = balance_before - calculatedAmount;
+          const note = `${new Date().toISOString()} parking ${applicableFee.fee_name} (${parkingTimeInHours.toFixed(2)} giờ)`;
+
+          const transaction = await Transaction.create({
+            rfid_etc_id: linkedRfidEtc._id,
+            amount: calculatedAmount,
+            type: TransactionType.CASH_OUT,
+            source: TransactionSource.CASH,
+            balance_before,
+            balance_after,
+            note
+          });
+
+          linkedRfidEtc.balance = balance_after;
+          await linkedRfidEtc.save();
+
+          feeRecord.transaction_id = transaction._id as any;
+          feeRecord.is_paid = true;
+          feeRecord.paid_at = new Date();
+          await feeRecord.save();
+
+          createdTransaction = await transaction.populate('rfid_etc_id');
+        }
+
+        createdFeeRecord = await feeRecord.populate(['vehicle_id', 'event_id', 'fee_id', 'transaction_id']);
+      }
+    }
+
     // Populate vehicle info
     await event.populate('vehicle_id', 'license_plate vehicle_type company rfid_etc gate');
 
-    created(res, event, 'Tạo sự kiện thành công');
+    created(res, {
+      event,
+      fee_record: createdFeeRecord,
+      transaction: createdTransaction
+    }, 'Tạo sự kiện thành công');
   } catch (error: any) {
     console.error('Error creating event:', error);
 

@@ -1,6 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { Account, Transaction, TransactionSource, TransactionType } from '../models';
+import { RfidEtc, Transaction, TransactionSource, TransactionType, Vehicle } from '../models';
 import { internalError } from '../utils';
 
 const transactionRouter = express.Router();
@@ -14,39 +14,48 @@ const normalizeObjectId = (
 const validateEnumValue = <T extends Record<string, string>>(value: any, enumObj: T) =>
     Object.values(enumObj).includes(value);
 
-// helper apply transaction effect to account
+const normalizeNote = (value: any) => {
+    if (value === undefined || value === null) {
+        return undefined;
+    }
+
+    const text = String(value).trim();
+    return text.length ? text : undefined;
+};
+
+// helper apply transaction effect to rfid_etc
 const applyTransactionEffect = async (
-    accountId: mongoose.Types.ObjectId,
+    rfidEtcId: mongoose.Types.ObjectId,
     type: TransactionType,
     amount: number,
     direction: 'apply' | 'revert'
 ) => {
-    const account = await Account.findById(accountId);
-    if (!account) {
-        throw new Error('ACCOUNT_NOT_FOUND');
+    const rfidEtc = await RfidEtc.findById(rfidEtcId);
+    if (!rfidEtc) {
+        throw new Error('RFID_ETC_NOT_FOUND');
     }
 
     const factor = direction === 'apply' ? 1 : -1;
 
     if (type === TransactionType.CASH_IN) {
-        account.balance += factor * amount;
+        rfidEtc.balance += factor * amount;
     } else {
-        account.balance -= factor * amount;
+        rfidEtc.balance -= factor * amount;
     }
 
-    if (account.balance < 0) {
+    if (rfidEtc.balance < 0) {
         throw new Error('INSUFFICIENT_BALANCE');
     }
 
-    await account.save();
-    return account;
+    await rfidEtc.save();
+    return rfidEtc;
 };
 
 // GET /transaction - list all transactions
 transactionRouter.get('/', async (_req, res) => {
     try {
         const transactions = await Transaction.find()
-            .populate('account_id')
+            .populate('rfid_etc_id')
             .populate('perform_by')
             .sort({ createdAt: -1 });
 
@@ -74,7 +83,7 @@ transactionRouter.get('/:id', async (req, res) => {
         }
 
         const transaction = await Transaction.findById(id)
-            .populate('account_id')
+            .populate('rfid_etc_id')
             .populate('perform_by');
 
         if (!transaction) {
@@ -99,26 +108,37 @@ transactionRouter.get('/:id', async (req, res) => {
 transactionRouter.post('/', async (req, res) => {
     try {
         const {
-            account_id,
+            rfid_etc_id,
+            rfid_etc,
+            license_plate,
             amount,
             type,
             source,
             reference_code,
-            perform_by
+            perform_by,
+            note
         } = req.body;
 
-        if (!account_id || amount === undefined || !type || !source) {
+        if ((!rfid_etc_id && !rfid_etc && !license_plate) || amount === undefined || !type || !source) {
             res.status(400).json({
                 success: false,
-                error: 'Thiếu trường bắt buộc: account_id, amount, type, source'
+                error: 'Thiếu trường bắt buộc: rfid_etc_id, rfid_etc hoặc license_plate, amount, type, source'
             });
             return;
         }
 
-        if (!isValidObjectId(account_id) || (perform_by && !isValidObjectId(perform_by))) {
+        if (rfid_etc_id && !isValidObjectId(rfid_etc_id)) {
             res.status(400).json({
                 success: false,
-                error: 'account_id hoặc perform_by không hợp lệ'
+                error: 'rfid_etc_id không hợp lệ'
+            });
+            return;
+        }
+
+        if (perform_by && !isValidObjectId(perform_by)) {
+            res.status(400).json({
+                success: false,
+                error: 'perform_by không hợp lệ'
             });
             return;
         }
@@ -139,25 +159,71 @@ transactionRouter.post('/', async (req, res) => {
             return;
         }
 
-        const account = await Account.findById(account_id);
+        let resolvedRfidEtcId = rfid_etc_id;
+        let rfidEtcDoc = null;
 
-        if (!account) {
+        if (resolvedRfidEtcId) {
+            rfidEtcDoc = await RfidEtc.findById(resolvedRfidEtcId);
+        } else if (rfid_etc) {
+            const normalizedRfidEtc = String(rfid_etc).trim();
+            if (!normalizedRfidEtc) {
+                res.status(400).json({
+                    success: false,
+                    error: 'rfid_etc không được để trống'
+                });
+                return;
+            }
+            rfidEtcDoc = await RfidEtc.findOne({ rfid_etc: normalizedRfidEtc });
+        } else if (license_plate) {
+            const normalizedPlate = String(license_plate).trim().toUpperCase();
+
+            if (!normalizedPlate) {
+                res.status(400).json({
+                    success: false,
+                    error: 'license_plate không được để trống'
+                });
+                return;
+            }
+
+            const vehicle = await Vehicle.findOne({ license_plate: normalizedPlate });
+
+            if (!vehicle) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Không tìm thấy phương tiện với license_plate đã cung cấp'
+                });
+                return;
+            }
+
+            if (!vehicle.rfid_etc) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Phương tiện này chưa có RFID/ETC'
+                });
+                return;
+            }
+
+            rfidEtcDoc = await RfidEtc.findOne({ rfid_etc: vehicle.rfid_etc });
+        }
+
+        if (!rfidEtcDoc) {
             res.status(404).json({
                 success: false,
-                error: 'Không tìm thấy tài khoản'
+                error: 'Không tìm thấy RFID/ETC'
             });
             return;
         }
 
-        if (!account.is_active) {
+        if (!rfidEtcDoc.is_active) {
             res.status(400).json({
                 success: false,
-                error: 'Tài khoản đang bị khóa'
+                error: 'RFID/ETC đang bị khóa'
             });
             return;
         }
 
-        const balance_before = account.balance;
+        resolvedRfidEtcId = rfidEtcDoc._id;
+        const balance_before = rfidEtcDoc.balance;
         let balance_after = balance_before;
 
         if (type === TransactionType.CASH_IN) {
@@ -173,21 +239,24 @@ transactionRouter.post('/', async (req, res) => {
             balance_after -= amount;
         }
 
+        const normalizedNote = normalizeNote(note);
+
         const transaction = await Transaction.create({
-            account_id,
+            rfid_etc_id: resolvedRfidEtcId,
             amount,
             type,
             source,
             reference_code,
             perform_by,
+            ...(normalizedNote !== undefined ? { note: normalizedNote } : {}),
             balance_before,
             balance_after
         });
 
-        account.balance = balance_after;
-        await account.save();
+        rfidEtcDoc.balance = balance_after;
+        await rfidEtcDoc.save();
 
-        const populated = await transaction.populate(['account_id', 'perform_by']);
+        const populated = await transaction.populate(['rfid_etc_id', 'perform_by']);
 
         res.status(201).json({
             success: true,
@@ -231,20 +300,25 @@ transactionRouter.put('/:id', async (req, res) => {
             return;
         }
 
-        const payload = {
-            account_id: req.body.account_id ?? existing.account_id,
+        const payload: any = {
+            rfid_etc_id: req.body.rfid_etc_id ?? existing.rfid_etc_id,
             amount: req.body.amount ?? existing.amount,
             type: req.body.type ?? existing.type,
             source: req.body.source ?? existing.source,
             reference_code: req.body.reference_code ?? existing.reference_code,
-            perform_by: req.body.perform_by ?? existing.perform_by
+            perform_by: req.body.perform_by ?? existing.perform_by,
+            note: existing.note
         };
 
-        if (!isValidObjectId(payload.account_id.toString()) ||
+        if (req.body.note !== undefined) {
+            payload.note = normalizeNote(req.body.note);
+        }
+
+        if (!isValidObjectId(payload.rfid_etc_id.toString()) ||
             (payload.perform_by && !isValidObjectId(payload.perform_by.toString()))) {
             res.status(400).json({
                 success: false,
-                error: 'account_id hoặc perform_by không hợp lệ'
+                error: 'rfid_etc_id hoặc perform_by không hợp lệ'
             });
             return;
         }
@@ -266,32 +340,32 @@ transactionRouter.put('/:id', async (req, res) => {
             return;
         }
 
-        const oldAccountId = normalizeObjectId(existing.account_id as any);
-        const targetAccountId = normalizeObjectId(payload.account_id as any);
+        const oldRfidEtcId = normalizeObjectId(existing.rfid_etc_id as any);
+        const targetRfidEtcId = normalizeObjectId(payload.rfid_etc_id as any);
 
         // revert old effect
-        const oldAccount = await applyTransactionEffect(oldAccountId, existing.type, existing.amount, 'revert');
+        const oldRfidEtc = await applyTransactionEffect(oldRfidEtcId, existing.type, existing.amount, 'revert');
 
-        // if account changed, use new account; otherwise the revert already adjusted the same account
-        const targetAccount = oldAccountId.equals(targetAccountId)
-            ? oldAccount
-            : await Account.findById(targetAccountId);
+        // if rfid_etc changed, use new rfid_etc; otherwise the revert already adjusted the same rfid_etc
+        const targetRfidEtc = oldRfidEtcId.equals(targetRfidEtcId)
+            ? oldRfidEtc
+            : await RfidEtc.findById(targetRfidEtcId);
 
-        if (!targetAccount) {
-            throw new Error('ACCOUNT_NOT_FOUND');
+        if (!targetRfidEtc) {
+            throw new Error('RFID_ETC_NOT_FOUND');
         }
 
-        if (!targetAccount.is_active) {
+        if (!targetRfidEtc.is_active) {
             res.status(400).json({
                 success: false,
                 error: 'Tài khoản đang bị khóa'
             });
             // re-apply old effect to keep data consistent
-            await applyTransactionEffect(oldAccountId, existing.type, existing.amount, 'apply');
+            await applyTransactionEffect(oldRfidEtcId, existing.type, existing.amount, 'apply');
             return;
         }
 
-        const balance_before = targetAccount.balance;
+        const balance_before = targetRfidEtc.balance;
         let balance_after = balance_before;
 
         if (payload.type === TransactionType.CASH_IN) {
@@ -303,31 +377,32 @@ transactionRouter.put('/:id', async (req, res) => {
                     error: 'Số dư không đủ để trừ'
                 });
                 // re-apply old effect before returning
-                await applyTransactionEffect(oldAccountId, existing.type, existing.amount, 'apply');
+                await applyTransactionEffect(oldRfidEtcId, existing.type, existing.amount, 'apply');
                 return;
             }
             balance_after -= payload.amount;
         }
 
-        targetAccount.balance = balance_after;
-        await targetAccount.save();
+        targetRfidEtc.balance = balance_after;
+        await targetRfidEtc.save();
 
         const updated = await Transaction.findByIdAndUpdate(
             id,
             {
                 $set: {
-                    account_id: targetAccountId,
+                    rfid_etc_id: targetRfidEtcId,
                     amount: payload.amount,
                     type: payload.type,
                     source: payload.source,
                     reference_code: payload.reference_code,
                     perform_by: payload.perform_by,
+                    note: payload.note,
                     balance_before,
                     balance_after
                 }
             },
             { new: true, runValidators: true }
-        ).populate(['account_id', 'perform_by']);
+        ).populate(['rfid_etc_id', 'perform_by']);
 
         res.json({
             success: true,
@@ -336,10 +411,10 @@ transactionRouter.put('/:id', async (req, res) => {
     } catch (error: any) {
         console.error('Error updating transaction:', error);
 
-        if (error.message === 'ACCOUNT_NOT_FOUND') {
+        if (error.message === 'RFID_ETC_NOT_FOUND') {
             res.status(404).json({
                 success: false,
-                error: 'Không tìm thấy tài khoản'
+                error: 'Không tìm thấy RFID/ETC'
             });
             return;
         }
@@ -388,7 +463,7 @@ transactionRouter.delete('/:id', async (req, res) => {
         }
 
         await applyTransactionEffect(
-            normalizeObjectId(existing.account_id as any),
+            normalizeObjectId(existing.rfid_etc_id as any),
             existing.type,
             existing.amount,
             'revert'
@@ -402,10 +477,10 @@ transactionRouter.delete('/:id', async (req, res) => {
     } catch (error: any) {
         console.error('Error deleting transaction:', error);
 
-        if (error.message === 'ACCOUNT_NOT_FOUND') {
+        if (error.message === 'RFID_ETC_NOT_FOUND') {
             res.status(404).json({
                 success: false,
-                error: 'Không tìm thấy tài khoản'
+                error: 'Không tìm thấy RFID/ETC'
             });
             return;
         }
