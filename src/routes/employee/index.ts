@@ -19,12 +19,15 @@ interface IEmployeeRequest extends express.Request {
 
 const employeeRouter = express.Router();
 
-//GET /employee/list - Get all employees with pagination
+//GET /employee/list - Get all employees with pagination, search, and filter
 employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     // Parse pagination parameters
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
+    const search = req.query.search as string || '';
+    const status = req.query.status as string || 'all';
+    const role = req.query.role as string || 'all'; 
 
     // Validate pagination parameters
     if (page < 1) {
@@ -46,12 +49,59 @@ employeeRouter.get('/list', adminAuth, async (req: express.Request, res: express
     // Calculate skip value
     const skip = (page - 1) * limit;
 
+    // Build filter query
+    const filter: any = {};
+
+    // Filter by status
+    if (status === 'active') {
+      filter.isActive = true;
+    } else if (status === 'inactive') {
+      filter.isActive = false;
+    }
+    // If status is 'all', don't add isActive filter
+
+    // Filter by role
+    if (role !== 'all' && role.trim()) {
+      // Find role by roleName (case insensitive)
+      const roleDoc = await Role.findOne({
+        roleName: { $regex: new RegExp(`^${role.trim()}$`, 'i') }
+      });
+
+      if (roleDoc) {
+        filter.roleId = roleDoc._id;
+      } else {
+        // If role not found, return empty result
+        res.json({
+          success: true,
+          data: [],
+          pagination: {
+            currentPage: page,
+            totalPages: 0,
+            totalItems: 0,
+            itemsPerPage: limit,
+            hasNextPage: false,
+            hasPrevPage: false
+          }
+        });
+        return;
+      }
+    }
+
+    // Filter by search term (search in fullName, phone)
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      filter.$or = [
+        { fullName: searchRegex },
+        { phone: searchRegex }
+      ];
+    }
+
     // Get total count for pagination info
-    const totalEmployees = await Employee.countDocuments({ isActive: true });
+    const totalEmployees = await Employee.countDocuments(filter);
     const totalPages = Math.ceil(totalEmployees / limit);
 
     // Get employees with pagination
-    const employees = await Employee.find({ isActive: true })
+    const employees = await Employee.find(filter)
       .populate('roleId')
       .sort({ createdAt: -1 })
       .skip(skip)
