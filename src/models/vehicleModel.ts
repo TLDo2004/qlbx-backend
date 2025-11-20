@@ -19,9 +19,10 @@ export enum VehicleGateStatus {
 // Interface for Vehicle document
 export interface IVehicle extends Document {
     license_plate: string;
-    vehicle_group?: string;
+    seat?: string;
     vehicle_type?: VehicleType;
     company?: mongoose.Schema.Types.ObjectId;
+    routeId?: mongoose.Schema.Types.ObjectId;
     rfid_etc?: string;
     gate: VehicleGateStatus;
     createdAt: Date;
@@ -37,7 +38,7 @@ const VehicleSchema = new Schema<IVehicle>({
         uppercase: true,
         trim: true
     },
-    vehicle_group: {
+    seat: {
         type: String,
         required: false,
         trim: true
@@ -50,6 +51,11 @@ const VehicleSchema = new Schema<IVehicle>({
     company: {
         type: Schema.Types.ObjectId,
         ref: 'bus_company',
+        required: false
+    },
+    routeId: {
+        type: Schema.Types.ObjectId,
+        ref: 'route',
         required: false
     },
     rfid_etc: {

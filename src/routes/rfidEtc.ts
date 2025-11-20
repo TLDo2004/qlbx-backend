@@ -1,12 +1,11 @@
 import express from 'express';
-import { RfidEtc, RfidEtcStatus } from '../models';
+import { RfidEtc } from '../models';
 import { internalError } from '../utils';
 
 interface IRfidEtcRequest extends express.Request {
   body: {
     rfid_etc: string;
     expiration_date: string;
-    status?: RfidEtcStatus;
     balance?: number;
     is_active?: boolean;
   };
@@ -102,7 +101,6 @@ rfidEtcRouter.get('/:rfid_etc', async (req: express.Request, res: express.Respon
         _id: rfidEtc._id,
         rfid_etc: rfidEtc.rfid_etc,
         expiration_date: rfidEtc.expiration_date,
-        status: rfidEtc.status,
         balance: rfidEtc.balance,
         is_active: rfidEtc.is_active,
         createdAt: rfidEtc.createdAt,
@@ -118,22 +116,13 @@ rfidEtcRouter.get('/:rfid_etc', async (req: express.Request, res: express.Respon
 // POST /rfid-etc - Create a new RFID/ETC
 rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Promise<void> => {
   try {
-    const { rfid_etc, expiration_date, status, balance, is_active } = req.body;
+    const { rfid_etc, expiration_date, balance, is_active } = req.body;
 
     // Validate required fields
     if (!rfid_etc || !expiration_date) {
       res.status(400).json({
         success: false,
         error: 'Thiếu các trường bắt buộc: rfid_etc và expiration_date là bắt buộc'
-      });
-      return;
-    }
-
-    // Validate status if provided
-    if (status && !Object.values(RfidEtcStatus).includes(status)) {
-      res.status(400).json({
-        success: false,
-        error: `Trạng thái không hợp lệ. Phải là một trong: ${Object.values(RfidEtcStatus).join(', ')}`
       });
       return;
     }
@@ -179,11 +168,6 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
       expiration_date: expirationDate
     };
 
-    // Add status if provided, otherwise use default
-    if (status) {
-      rfidEtcData.status = status;
-    }
-
     // Add balance if provided
     if (balance !== undefined) {
       rfidEtcData.balance = Number(balance);
@@ -204,7 +188,6 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
         _id: rfidEtc._id,
         rfid_etc: rfidEtc.rfid_etc,
         expiration_date: rfidEtc.expiration_date,
-        status: rfidEtc.status,
         balance: rfidEtc.balance,
         is_active: rfidEtc.is_active,
         createdAt: rfidEtc.createdAt,
@@ -242,7 +225,7 @@ rfidEtcRouter.post('/', async (req: IRfidEtcRequest, res: express.Response): Pro
 rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { rfid_etc } = req.params;
-    const { expiration_date, status, balance, is_active } = req.body;
+    const { expiration_date, balance, is_active } = req.body;
 
     // Validate rfid_etc parameter
     if (!rfid_etc || rfid_etc.trim() === '') {
@@ -262,15 +245,6 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
       res.status(404).json({
         success: false,
         error: 'Không tìm thấy RFID/ETC'
-      });
-      return;
-    }
-
-    // Validate status if provided
-    if (status && !Object.values(RfidEtcStatus).includes(status)) {
-      res.status(400).json({
-        success: false,
-        error: `Trạng thái không hợp lệ. Phải là một trong: ${Object.values(RfidEtcStatus).join(', ')}`
       });
       return;
     }
@@ -303,7 +277,6 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
     // Prepare update data (only include provided fields)
     const updateData: any = {};
     if (expiration_date !== undefined) updateData.expiration_date = expirationDate;
-    if (status !== undefined) updateData.status = status;
     if (balance !== undefined) updateData.balance = Number(balance);
     if (is_active !== undefined) updateData.is_active = Boolean(is_active);
 
@@ -321,7 +294,6 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
         _id: updatedRfidEtc?._id,
         rfid_etc: updatedRfidEtc?.rfid_etc,
         expiration_date: updatedRfidEtc?.expiration_date,
-        status: updatedRfidEtc?.status,
         balance: updatedRfidEtc?.balance,
         is_active: updatedRfidEtc?.is_active,
         createdAt: updatedRfidEtc?.createdAt,

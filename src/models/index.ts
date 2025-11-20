@@ -5,7 +5,7 @@ export { Permission } from './permissionModel';
 export { GateStaff } from './gateStaffModel';
 export { Camera, CameraGateStatus } from './cameraModel';
 export { Vehicle, VehicleType, VehicleGateStatus } from './vehicleModel';
-export { RfidEtc, RfidEtcStatus } from './rfidEtcModels';
+export { RfidEtc } from './rfidEtcModels';
 export { Event, EventType, EventStatus } from './eventModel';
 export { BusCompany } from './busCompanyModel';
 export { Route } from './routeModel';

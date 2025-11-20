@@ -4,10 +4,11 @@
 
 import RfidBufferService from './_rfidBufferService';
 import CameraBufferService from './_cameraBufferService';
-import { Event, EventType, EventStatus } from '../models';
+import { EventType, EventStatus } from '../models';
 import { Vehicle } from '../models/vehicleModel';
 import { RfidEtc } from '../models/rfidEtcModels';
 import { IRfidEvent, ICameraEvent } from '../types/eventBuffer';
+import EventCreationService, { EventCreationError } from './eventCreationService';
 
 class EventMergerService {
   private static instance: EventMergerService;
@@ -613,23 +614,27 @@ class EventMergerService {
 
       const mergedTimestamp = new Date(Math.min(rfidEvent.timestamp.getTime(), cameraEvent.timestamp.getTime()));
 
-      const eventData = {
-        eventType: EventType.MERGED,
-        status: status,
-        license_plate: license_plate || cameraEvent.license_plate,
-        vehicle_id: vehicle_id,
-        gateId: rfidEvent.gateId,
-        timestamp: mergedTimestamp,
-        rfidEvent: {
-          rfid_etc: rfidEvent.rfid_etc,
-          timestamp: rfidEvent.timestamp,
-          gateId: rfidEvent.gateId
-        },
-        cameraEvent: cameraEventData,
-        failureReason: failureReason
-      };
+      const mergedLicense =
+        license_plate || cameraEvent.license_plate || rfidEvent.license_plate || 'UNKNOWN';
 
-      const created = await Event.create(eventData);
+      const { event: created } = await EventCreationService.createEvent(
+        {
+          eventType: EventType.MERGED,
+          status,
+          failureReason,
+          license_plate: mergedLicense,
+          vehicle_id,
+          gateId: rfidEvent.gateId,
+          timestamp: mergedTimestamp,
+          rfidEvent: {
+            rfid_etc: rfidEvent.rfid_etc,
+            timestamp: rfidEvent.timestamp,
+            gateId: rfidEvent.gateId
+          },
+          cameraEvent: cameraEventData
+        },
+        { allowUnknownVehicle: true }
+      );
       // Link camera buffer event to persisted Event id for later image update
       try {
         const cameraBufferService = CameraBufferService.getInstance();
@@ -638,6 +643,9 @@ class EventMergerService {
       console.log(`Created merged event with status: ${status}`);
     } catch (error) {
       console.error('Error creating merged event:', error);
+      if (error instanceof EventCreationError) {
+        throw error;
+      }
       throw error;
     }
   }
@@ -654,22 +662,23 @@ class EventMergerService {
         undefined
       );
 
-      const eventData = {
-        eventType: EventType.RFID_ONLY,
-        status: status,
-        license_plate: license_plate || rfidEvent.license_plate || 'UNKNOWN',
-        vehicle_id: vehicle_id,
-        gateId: rfidEvent.gateId,
-        timestamp: rfidEvent.timestamp,
-        rfidEvent: {
-          rfid_etc: rfidEvent.rfid_etc,
+      await EventCreationService.createEvent(
+        {
+          eventType: EventType.RFID_ONLY,
+          status,
+          failureReason,
+          license_plate: license_plate || rfidEvent.license_plate || 'UNKNOWN',
+          vehicle_id,
+          gateId: rfidEvent.gateId,
           timestamp: rfidEvent.timestamp,
-          gateId: rfidEvent.gateId
+          rfidEvent: {
+            rfid_etc: rfidEvent.rfid_etc,
+            timestamp: rfidEvent.timestamp,
+            gateId: rfidEvent.gateId
+          }
         },
-        failureReason: failureReason
-      };
-
-      await Event.create(eventData);
+        { allowUnknownVehicle: true }
+      );
       console.log(`Created RFID-only event with status: ${status}`);
     } catch (error) {
       console.error('Error creating RFID-only event:', error);
@@ -698,18 +707,19 @@ class EventMergerService {
         cameraEventData.imageUrl = cameraEvent.imageUrl;
       }
 
-      const eventData = {
-        eventType: EventType.CAMERA_ONLY,
-        status: status,
-        license_plate: cameraEvent.license_plate,
-        vehicle_id: vehicle_id,
-        gateId: cameraEvent.gateId,
-        timestamp: cameraEvent.timestamp,
-        cameraEvent: cameraEventData,
-        failureReason: failureReason
-      };
-
-      const created = await Event.create(eventData);
+      const { event: created } = await EventCreationService.createEvent(
+        {
+          eventType: EventType.CAMERA_ONLY,
+          status,
+          failureReason,
+          license_plate: cameraEvent.license_plate,
+          vehicle_id,
+          gateId: cameraEvent.gateId,
+          timestamp: cameraEvent.timestamp,
+          cameraEvent: cameraEventData
+        },
+        { allowUnknownVehicle: true }
+      );
       try {
         const cameraBufferService = CameraBufferService.getInstance();
         cameraBufferService.setPersistedEventId(cameraEvent.id, created._id.toString());

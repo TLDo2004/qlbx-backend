@@ -6,9 +6,10 @@ import { internalError } from '../utils';
 interface IVehicleRequest extends express.Request {
   body: {
     license_plate: string;
-    vehicle_group?: string;
+    seat?: string;
     vehicle_type?: string;
     company?: string;
+    routeId?: string;
     rfid_etc?: string;
     gate: VehicleGateStatus;
   };
@@ -104,9 +105,10 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
       data: {
         _id: vehicle._id,
         license_plate: vehicle.license_plate,
-        vehicle_group: vehicle.vehicle_group,
+        seat: vehicle.seat,
         vehicle_type: vehicle.vehicle_type,
         company: vehicle.company,
+        routeId: vehicle.routeId,
         rfid_etc: vehicle.rfid_etc,
         gate: vehicle.gate,
         createdAt: vehicle.createdAt,
@@ -122,7 +124,7 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
 // POST /vehicle - Create a new vehicle
 vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Promise<void> => {
   try {
-    const { license_plate, vehicle_group, vehicle_type, company, rfid_etc, gate } = req.body;
+    const { license_plate, seat, vehicle_type, company, routeId, rfid_etc, gate } = req.body;
 
     // Validate required fields
     if (!license_plate || !gate) {
@@ -201,7 +203,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     };
 
     // Add optional fields if provided
-    if (vehicle_group) vehicleData.vehicle_group = vehicle_group.trim();
+    if (seat) vehicleData.seat = seat.trim();
     if (vehicle_type) vehicleData.vehicle_type = vehicle_type;
     if (company) {
       if (!isValidObjectId(company)) {
@@ -212,6 +214,16 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
         return;
       }
       vehicleData.company = new mongoose.Types.ObjectId(company);
+    }
+    if (routeId) {
+      if (!isValidObjectId(routeId)) {
+        res.status(400).json({
+          success: false,
+          error: 'routeId phải là ID hợp lệ của route'
+        });
+        return;
+      }
+      vehicleData.routeId = new mongoose.Types.ObjectId(routeId);
     }
     if (rfid_etc) vehicleData.rfid_etc = rfid_etc.trim();
 
@@ -224,9 +236,10 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
       data: {
         _id: vehicle._id,
         license_plate: vehicle.license_plate,
-        vehicle_group: vehicle.vehicle_group,
+        seat: vehicle.seat,
         vehicle_type: vehicle.vehicle_type,
         company: vehicle.company ? vehicle.company.toString() : null,
+        routeId: vehicle.routeId ? vehicle.routeId.toString() : null,
         rfid_etc: vehicle.rfid_etc,
         gate: vehicle.gate,
         createdAt: vehicle.createdAt,
@@ -265,7 +278,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
 vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { license_plate } = req.params;
-    const { vehicle_group, vehicle_type, company, rfid_etc, gate } = req.body;
+    const { seat, vehicle_type, company, routeId, rfid_etc, gate } = req.body;
 
     // Validate license_plate parameter
     if (!license_plate || license_plate.trim() === '') {
@@ -340,7 +353,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
 
     // Prepare update data (only include provided fields)
     const updateData: any = {};
-    if (vehicle_group !== undefined) updateData.vehicle_group = vehicle_group.trim();
+    if (seat !== undefined) updateData.seat = seat.trim();
     if (vehicle_type !== undefined) updateData.vehicle_type = vehicle_type;
     if (company !== undefined) {
       if (company === null || company === '') {
@@ -353,6 +366,19 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
         return;
       } else {
         updateData.company = new mongoose.Types.ObjectId(company);
+      }
+    }
+    if (routeId !== undefined) {
+      if (routeId === null || routeId === '') {
+        updateData.routeId = null;
+      } else if (!isValidObjectId(routeId)) {
+        res.status(400).json({
+          success: false,
+          error: 'routeId phải là ID hợp lệ của route'
+        });
+        return;
+      } else {
+        updateData.routeId = new mongoose.Types.ObjectId(routeId);
       }
     }
     if (rfid_etc !== undefined) updateData.rfid_etc = rfid_etc.trim();
@@ -371,9 +397,10 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
       data: {
         _id: updatedVehicle?._id,
         license_plate: updatedVehicle?.license_plate,
-        vehicle_group: updatedVehicle?.vehicle_group,
+        seat: updatedVehicle?.seat,
         vehicle_type: updatedVehicle?.vehicle_type,
         company: updatedVehicle?.company ? updatedVehicle.company.toString() : null,
+        routeId: updatedVehicle?.routeId ? updatedVehicle.routeId.toString() : null,
         rfid_etc: updatedVehicle?.rfid_etc,
         gate: updatedVehicle?.gate,
         createdAt: updatedVehicle?.createdAt,
