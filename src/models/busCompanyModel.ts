@@ -5,7 +5,6 @@ export interface IBusCompany extends Document {
     tax_code: string;
     address: string;
     phone: string;
-    vehicles: mongoose.Schema.Types.ObjectId[];
     contract_start: Date;
     contract_end: Date;
     is_active: boolean;
@@ -36,13 +35,6 @@ const BusCompanySchema = new Schema<IBusCompany>({
         type: String,
         required: true,
         trim: true
-    },
-    vehicles: {
-        type: [{
-            type: Schema.Types.ObjectId,
-            ref: 'vehicle'
-        }],
-        default: []
     },
     contract_start: {
         type: Date,
