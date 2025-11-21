@@ -40,6 +40,7 @@ export interface IEvent extends Document {
     // Vehicle info (from license_plate lookup)
     license_plate: string;
     vehicle_id?: mongoose.Schema.Types.ObjectId; // Reference to vehicle document
+    feeRecord_id?: mongoose.Schema.Types.ObjectId;
     
     // Gate info
     gateId: string;
@@ -85,6 +86,11 @@ const EventSchema = new Schema<IEvent>({
     vehicle_id: {
         type: Schema.Types.ObjectId,
         ref: 'vehicle',
+        required: false
+    },
+    feeRecord_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'fee_record',
         required: false
     },
     gateId: {

@@ -2,7 +2,6 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IFeeRecord extends Document {
     vehicle_id: mongoose.Schema.Types.ObjectId;
-    event_id?: mongoose.Schema.Types.ObjectId;
     fee_id: mongoose.Schema.Types.ObjectId;
     transaction_id?: mongoose.Schema.Types.ObjectId;
     timestamp: Date;
@@ -19,11 +18,6 @@ const FeeRecordSchema = new Schema<IFeeRecord>({
         type: Schema.Types.ObjectId,
         ref: 'vehicle',
         required: true
-    },
-    event_id: {
-        type: Schema.Types.ObjectId,
-        ref: 'event',
-        required: false
     },
     fee_id: {
         type: Schema.Types.ObjectId,
@@ -64,7 +58,6 @@ const FeeRecordSchema = new Schema<IFeeRecord>({
 });
 
 FeeRecordSchema.index({ vehicle_id: 1, timestamp: -1 });
-FeeRecordSchema.index({ event_id: 1 });
 
 export const FeeRecord = mongoose.model<IFeeRecord>('fee_record', FeeRecordSchema, 'fee_record');
 

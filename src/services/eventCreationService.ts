@@ -294,7 +294,6 @@ export class EventCreationService {
 
         const feeRecord = await FeeRecord.create({
           vehicle_id: linkedVehicle._id,
-          event_id: event._id,
           fee_id: applicableFee._id,
           timestamp: resolvedTimestamp,
           amount: applicableFee.amount,
@@ -333,7 +332,26 @@ export class EventCreationService {
           createdTransaction = await transaction.populate('rfid_etc_id');
         }
 
-        createdFeeRecord = await feeRecord.populate(['vehicle_id', 'event_id', 'fee_id', 'transaction_id']);
+        createdFeeRecord = await feeRecord.populate([
+          {
+            path: 'vehicle_id',
+            populate: [
+              {
+                path: 'companyId',
+                select: 'name tax_code address phone contract_start contract_end is_active'
+              },
+              {
+                path: 'routeId',
+                select: 'name origin destination'
+              }
+            ]
+          },
+          'fee_id',
+          'transaction_id'
+        ]);
+
+        event.set('feeRecord_id', feeRecord._id);
+        await event.save();
       }
 
       if (isGateOut && linkedVehicle && applicableFee) {
@@ -352,7 +370,6 @@ export class EventCreationService {
 
           const feeRecord = await FeeRecord.create({
             vehicle_id: linkedVehicle._id,
-            event_id: event._id,
             fee_id: applicableFee._id,
             timestamp: resolvedTimestamp,
             amount: calculatedAmount,
@@ -395,11 +412,42 @@ export class EventCreationService {
             createdTransaction = await transaction.populate('rfid_etc_id');
           }
 
-          createdFeeRecord = await feeRecord.populate(['vehicle_id', 'event_id', 'fee_id', 'transaction_id']);
+          createdFeeRecord = await feeRecord.populate([
+            {
+              path: 'vehicle_id',
+              populate: [
+                {
+                  path: 'companyId',
+                  select: 'name tax_code address phone contract_start contract_end is_active'
+                },
+                {
+                  path: 'routeId',
+                  select: 'name origin destination'
+                }
+              ]
+            },
+            'fee_id',
+            'transaction_id'
+          ]);
+
+          event.set('feeRecord_id', feeRecord._id);
+          await event.save();
         }
       }
 
-      await event.populate('vehicle_id', 'license_plate vehicle_type company rfid_etc gate');
+      await event.populate({
+        path: 'vehicle_id',
+        populate: [
+          {
+            path: 'companyId',
+            select: 'name tax_code address phone contract_start contract_end is_active'
+          },
+          {
+            path: 'routeId',
+            select: 'name origin destination'
+          }
+        ]
+      });
 
       return {
         event,

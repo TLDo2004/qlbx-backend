@@ -21,7 +21,7 @@ export interface IVehicle extends Document {
     license_plate: string;
     seat?: string;
     vehicle_type?: VehicleType;
-    company?: mongoose.Schema.Types.ObjectId;
+    companyId?: mongoose.Schema.Types.ObjectId;
     routeId?: mongoose.Schema.Types.ObjectId;
     rfid_etc?: string;
     gate: VehicleGateStatus;
@@ -48,7 +48,7 @@ const VehicleSchema = new Schema<IVehicle>({
         required: false,
         enum: Object.values(VehicleType)
     },
-    company: {
+    companyId: {
         type: Schema.Types.ObjectId,
         ref: 'bus_company',
         required: false

@@ -8,7 +8,7 @@ interface IVehicleRequest extends express.Request {
     license_plate: string;
     seat?: string;
     vehicle_type?: string;
-    company?: string;
+    companyId?: string;
     routeId?: string;
     rfid_etc?: string;
     gate: VehicleGateStatus;
@@ -107,7 +107,7 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
         license_plate: vehicle.license_plate,
         seat: vehicle.seat,
         vehicle_type: vehicle.vehicle_type,
-        company: vehicle.company,
+        companyId: vehicle.companyId,
         routeId: vehicle.routeId,
         rfid_etc: vehicle.rfid_etc,
         gate: vehicle.gate,
@@ -124,7 +124,7 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
 // POST /vehicle - Create a new vehicle
 vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Promise<void> => {
   try {
-    const { license_plate, seat, vehicle_type, company, routeId, rfid_etc, gate } = req.body;
+    const { license_plate, seat, vehicle_type, companyId, routeId, rfid_etc, gate } = req.body;
 
     // Validate required fields
     if (!license_plate || !gate) {
@@ -205,15 +205,15 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     // Add optional fields if provided
     if (seat) vehicleData.seat = seat.trim();
     if (vehicle_type) vehicleData.vehicle_type = vehicle_type;
-    if (company) {
-      if (!isValidObjectId(company)) {
+    if (companyId) {
+      if (!isValidObjectId(companyId)) {
         res.status(400).json({
           success: false,
-          error: 'company phải là ID hợp lệ của bus company'
+          error: 'companyId phải là ID hợp lệ của bus company'
         });
         return;
       }
-      vehicleData.company = new mongoose.Types.ObjectId(company);
+      vehicleData.companyId = new mongoose.Types.ObjectId(companyId);
     }
     if (routeId) {
       if (!isValidObjectId(routeId)) {
@@ -238,7 +238,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
         license_plate: vehicle.license_plate,
         seat: vehicle.seat,
         vehicle_type: vehicle.vehicle_type,
-        company: vehicle.company ? vehicle.company.toString() : null,
+        companyId: vehicle.companyId ? vehicle.companyId.toString() : null,
         routeId: vehicle.routeId ? vehicle.routeId.toString() : null,
         rfid_etc: vehicle.rfid_etc,
         gate: vehicle.gate,
@@ -278,7 +278,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
 vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { license_plate } = req.params;
-    const { seat, vehicle_type, company, routeId, rfid_etc, gate } = req.body;
+    const { seat, vehicle_type, companyId, routeId, rfid_etc, gate } = req.body;
 
     // Validate license_plate parameter
     if (!license_plate || license_plate.trim() === '') {
@@ -355,17 +355,17 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     const updateData: any = {};
     if (seat !== undefined) updateData.seat = seat.trim();
     if (vehicle_type !== undefined) updateData.vehicle_type = vehicle_type;
-    if (company !== undefined) {
-      if (company === null || company === '') {
-        updateData.company = null;
-      } else if (!isValidObjectId(company)) {
+    if (companyId !== undefined) {
+      if (companyId === null || companyId === '') {
+        updateData.companyId = null;
+      } else if (!isValidObjectId(companyId)) {
         res.status(400).json({
           success: false,
-          error: 'company phải là ID hợp lệ của bus company'
+          error: 'companyId phải là ID hợp lệ của bus company'
         });
         return;
       } else {
-        updateData.company = new mongoose.Types.ObjectId(company);
+        updateData.companyId = new mongoose.Types.ObjectId(companyId);
       }
     }
     if (routeId !== undefined) {
@@ -399,7 +399,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
         license_plate: updatedVehicle?.license_plate,
         seat: updatedVehicle?.seat,
         vehicle_type: updatedVehicle?.vehicle_type,
-        company: updatedVehicle?.company ? updatedVehicle.company.toString() : null,
+        companyId: updatedVehicle?.companyId ? updatedVehicle.companyId.toString() : null,
         routeId: updatedVehicle?.routeId ? updatedVehicle.routeId.toString() : null,
         rfid_etc: updatedVehicle?.rfid_etc,
         gate: updatedVehicle?.gate,
