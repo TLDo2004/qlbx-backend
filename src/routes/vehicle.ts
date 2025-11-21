@@ -1,6 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { Vehicle, VehicleType, VehicleGateStatus } from '../models';
+import { Vehicle, VehicleType, VehicleGateStatus, BusCompany } from '../models';
 import { internalError } from '../utils';
 
 interface IVehicleRequest extends express.Request {
@@ -18,12 +18,19 @@ interface IVehicleRequest extends express.Request {
 const vehicleRouter = express.Router();
 const isValidObjectId = (id: string) => mongoose.Types.ObjectId.isValid(id);
 
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // GET /vehicle - Get all vehicles with pagination
 vehicleRouter.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     // Parse pagination parameters
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
+
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const vehicleTypeFilter = typeof req.query.vehicle_type === 'string' ? req.query.vehicle_type : '';
+    const gateFilter = typeof req.query.gate === 'string' ? req.query.gate : '';
+    const companyIdFilter = typeof req.query.companyId === 'string' ? req.query.companyId.trim() : '';
 
     // Validate pagination parameters
     if (page < 1) {
@@ -42,22 +49,101 @@ vehicleRouter.get('/', async (req: express.Request, res: express.Response): Prom
       return;
     }
 
+    // Build filter conditions
+    const filters: any = {};
+
+    if (vehicleTypeFilter && vehicleTypeFilter !== 'all') {
+      if (!Object.values(VehicleType).includes(vehicleTypeFilter as VehicleType)) {
+        res.status(400).json({
+          success: false,
+          error: 'Loại phương tiện không hợp lệ'
+        });
+        return;
+      }
+      filters.vehicle_type = vehicleTypeFilter;
+    }
+
+    if (gateFilter && gateFilter !== 'all') {
+      if (!Object.values(VehicleGateStatus).includes(gateFilter as VehicleGateStatus)) {
+        res.status(400).json({
+          success: false,
+          error: 'Trạng thái cổng không hợp lệ'
+        });
+        return;
+      }
+      filters.gate = gateFilter;
+    }
+
+    if (companyIdFilter) {
+      if (!isValidObjectId(companyIdFilter)) {
+        res.status(400).json({
+          success: false,
+          error: 'companyId phải là ID hợp lệ của bus company'
+        });
+        return;
+      }
+      filters.companyId = new mongoose.Types.ObjectId(companyIdFilter);
+    }
+
+    const searchConditions: any[] = [];
+    if (search) {
+      const regex = new RegExp(escapeRegex(search), 'i');
+      searchConditions.push(
+        { license_plate: regex },
+        { seat: regex },
+        { rfid_etc: regex }
+      );
+
+      const matchingCompanies = await BusCompany.find({ name: regex }).select('_id').lean();
+      if (matchingCompanies.length > 0) {
+        searchConditions.push({
+          companyId: { $in: matchingCompanies.map(company => company._id) }
+        });
+      }
+    }
+
+    if (searchConditions.length > 0) {
+      filters.$or = searchConditions;
+    }
+
     // Calculate skip value
     const skip = (page - 1) * limit;
 
     // Get total count for pagination info
-    const totalVehicles = await Vehicle.countDocuments();
+    const totalVehicles = await Vehicle.countDocuments(filters);
     const totalPages = Math.ceil(totalVehicles / limit);
 
     // Get vehicles with pagination
-    const vehicles = await Vehicle.find()
+    const vehicles = await Vehicle.find(filters)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .populate({
+        path: 'companyId',
+        select: 'name'
+      })
+      .lean();
+
+    const formattedVehicles = vehicles.map((vehicle: any) => {
+      const hasCompanyDetails = vehicle.companyId && typeof vehicle.companyId === 'object' && 'name' in vehicle.companyId;
+      const companyDoc = hasCompanyDetails ? vehicle.companyId : null;
+
+      return {
+        _id: vehicle._id,
+        license_plate: vehicle.license_plate,
+        seat: vehicle.seat,
+        vehicle_type: vehicle.vehicle_type,
+        company: companyDoc ? companyDoc.name : null,
+        rfid_etc: vehicle.rfid_etc,
+        gate: vehicle.gate,
+        createdAt: vehicle.createdAt,
+        updatedAt: vehicle.updatedAt
+      };
+    });
 
     res.json({
       success: true,
-      data: vehicles,
+      data: formattedVehicles,
       pagination: {
         currentPage: page,
         totalPages: totalPages,
