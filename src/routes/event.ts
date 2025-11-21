@@ -72,7 +72,32 @@ eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Re
 
     // Get events with pagination
     const events = await Event.find(filter)
-      .populate('vehicle_id', 'license_plate vehicle_type company rfid_etc gate')
+      .populate({
+        path: 'vehicle_id',
+        populate: [
+          {
+            path: 'companyId',
+            select: 'name tax_code address phone contract_start contract_end is_active'
+          },
+          {
+            path: 'routeId',
+            select: 'name origin destination'
+          }
+        ]
+      })
+      .populate({
+        path: 'feeRecord_id',
+        select: 'vehicle_id fee_id transaction_id timestamp amount is_paid paid_at parking_time createdAt updatedAt',
+        populate: [
+          {
+            path: 'fee_id',
+            select: 'fee_name fee_type amount description'
+          },
+          {
+            path: 'transaction_id'
+          }
+        ]
+      })
       .sort({ timestamp: -1 })
       .skip(skip)
       .limit(limit);
@@ -105,7 +130,32 @@ eventRouter.get('/:id', gateStaffAuth, async (req: express.Request, res: express
     }
 
     const event = await Event.findById(id)
-      .populate('vehicle_id', 'license_plate vehicle_type company rfid_etc gate');
+      .populate({
+        path: 'vehicle_id',
+        populate: [
+          {
+            path: 'companyId',
+            select: 'name tax_code address phone contract_start contract_end is_active'
+          },
+          {
+            path: 'routeId',
+            select: 'name origin destination'
+          }
+        ]
+      })
+      .populate({
+        path: 'feeRecord_id',
+        select: 'vehicle_id fee_id transaction_id timestamp amount is_paid paid_at parking_time createdAt updatedAt',
+        populate: [
+          {
+            path: 'fee_id',
+            select: 'fee_name fee_type amount description'
+          },
+          {
+            path: 'transaction_id'
+          }
+        ]
+      });
 
     if (!event) {
       notFound(res, 'Không tìm thấy sự kiện');
@@ -169,7 +219,31 @@ eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: 
       id,
       updateData,
       { new: true, runValidators: true }
-    ).populate('vehicle_id', 'license_plate vehicle_type company rfid_etc gate');
+    ).populate({
+      path: 'vehicle_id',
+      populate: [
+        {
+          path: 'companyId',
+          select: 'name tax_code address phone contract_start contract_end is_active'
+        },
+        {
+          path: 'routeId',
+          select: 'name origin destination'
+        }
+      ]
+    }).populate({
+      path: 'feeRecord_id',
+      select: 'vehicle_id fee_id transaction_id timestamp amount is_paid paid_at parking_time createdAt updatedAt',
+      populate: [
+        {
+          path: 'fee_id',
+          select: 'fee_name fee_type amount description'
+        },
+        {
+          path: 'transaction_id'
+        }
+      ]
+    });
 
     success(res, updatedEvent, 'Cập nhật trạng thái sự kiện thành công');
   } catch (error: any) {
