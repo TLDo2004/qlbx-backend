@@ -346,7 +346,7 @@ export class EventCreationService {
           const parkingTimeInMs = resolvedTimestamp.getTime() - latestGateInEvent.timestamp.getTime();
           const parkingTimeInHours = parkingTimeInMs / (1000 * 60 * 60);
           const parkingTimeInMinutes = Math.round(parkingTimeInHours * 60);
-          const calculatedAmount = applicableFee.amount * parkingTimeInHours;
+          const calculatedAmount = Math.round((applicableFee.amount * parkingTimeInHours) / 1000) * 1000;
 
           await ensureLinkedRfidEtc();
 
