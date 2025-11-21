@@ -99,6 +99,51 @@ gateStaffRouter.get('/list', adminAuth, async (req: express.Request, res: expres
   }
 });
 
+// GET /employee/gate-staff/:id - Get gate staff by ID
+gateStaffRouter.get('/:id', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!id || !id.trim()) {
+      res.status(400).json({
+        success: false,
+        error: 'ID nhân viên cổng là bắt buộc'
+      });
+      return;
+    }
+
+    const gateStaff = await GateStaff.findById(id.trim());
+
+    if (!gateStaff) {
+      res.status(404).json({
+        success: false,
+        error: 'Không tìm thấy nhân viên cổng'
+      });
+      return;
+    }
+
+    const firebaseUser = await getFirebaseUserByUid(gateStaff.uid);
+
+    res.json({
+      success: true,
+      data: {
+        _id: gateStaff._id,
+        uid: gateStaff.uid,
+        fullName: gateStaff.fullName,
+        phone: gateStaff.phone,
+        email: firebaseUser?.email || null,
+        urlImage: gateStaff.urlImage || null,
+        isActive: gateStaff.isActive,
+        createdAt: gateStaff.createdAt,
+        updatedAt: gateStaff.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching gate staff by id:', error);
+    internalError(res, 'Không thể lấy thông tin nhân viên cổng');
+  }
+});
+
 //POST /employee/gateStaff - create a new gate staff
 gateStaffRouter.post('/', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
