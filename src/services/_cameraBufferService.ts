@@ -160,7 +160,7 @@ class CameraBufferService {
    */
   public cleanupExpiredEvents(): number {
     const now = Date.now();
-    const maxAge = 15000; // 15 seconds - fixed expired time
+    const maxAge = 5000; // 5 seconds - fixed expired time
     let cleanedCount = 0;
 
     for (const [id, event] of this.cameraBuffer) {
@@ -209,7 +209,7 @@ class CameraBufferService {
   public removeExpiredOrProcessedEvents(): number {
     let removedCount = 0;
     const now = Date.now();
-    const maxAge = 15000; // 15 seconds
+    const maxAge = 5000; // 5 seconds
 
     for (const [id, event] of this.cameraBuffer) {
       const eventAge = now - event.timestamp.getTime();

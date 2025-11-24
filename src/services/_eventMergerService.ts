@@ -259,7 +259,7 @@ class EventMergerService {
   private isEventExpired(timestamp: Date): boolean {
     const now = Date.now();
     const eventAge = now - timestamp.getTime();
-    return eventAge > 15000; // 15 seconds
+    return eventAge > 5000; // 5 seconds
   }
 
   /**
