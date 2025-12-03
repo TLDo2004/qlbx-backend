@@ -2,6 +2,7 @@ import express from 'express';
 import { internalError, badRequest } from '../../utils';
 import { gateStaffAuth } from '../../middleware/index';
 import { spawn } from 'child_process';
+import { GateId } from '../../models';
 import CameraBufferService from '../../services/_cameraBufferService';
 import { Event } from '../../models';
 
@@ -23,7 +24,7 @@ interface IANPRStreamRequest extends express.Request {
     ipAddress: string;
     username: string;
     password: string;
-    gateId: string; // e.g. "gate_01_in", "gate_01_out"
+    gateId: GateId;
   };
 }
 
@@ -135,6 +136,11 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
     // Validate required fields
     if (!ipAddress || !username || !password || !gateId) {
       badRequest(res, 'Thiếu các trường bắt buộc: ipAddress, username, password, gateId');
+      return;
+    }
+
+    if (!Object.values(GateId).includes(gateId as GateId)) {
+      badRequest(res, 'gateId không hợp lệ. Phải là "gate_in" hoặc "gate_out"');
       return;
     }
 
@@ -309,7 +315,7 @@ anprRouter.post('/alertStream', gateStaffAuth, async (req: IANPRStreamRequest, r
                     const eventId = cameraBufferService.addCameraEvent({
                       license_plate: licensePlate,
                       timestamp: new Date(),
-                      gateId: gateId,
+                      gateId: gateId as GateId,
                       imageData: null
                     });
                     pendingEventIds.push(eventId);

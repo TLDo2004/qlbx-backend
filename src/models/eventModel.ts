@@ -9,24 +9,37 @@ export enum EventType {
 
 // Enum for event status
 export enum EventStatus {
-    ACCEPTED = 'accepted',       // Vehicle is accepted to enter the station
-    REJECTED = 'rejected',       // New vehicle that is not existing in the system
-    ETC_ERROR = 'etc_error',     // RFID/ETC detected but error (eg. expired, invalid, ...)
-    NO_ETC = 'no_etc',           // RFID/ETC not detected
+    ACCEPTED = 'passed',         // Vehicle is accepted to enter the station
+    REJECTED = 'blocked',        // New vehicle that is not existing in the system
+    ETC_ERROR = 'rfid_error',    // RFID/ETC detected but error (eg. expired, invalid, ...)
+    NO_ETC = 'no_rfid',          // RFID/ETC not detected
+    FAILED = 'failed',           // Event processing failed
+    UNVERIFIED = 'unverified',   // Event not yet verified
 }
 
+// Enum for gate ID
+export enum GateId {
+    GATE_IN = 'gate_in',
+    GATE_OUT = 'gate_out'
+}
+
+// Enum for direction
+export enum Direction {
+    IN = 'in',
+    OUT = 'out'
+}
 // Interface for RFID event data
 export interface IRfidEventData {
     rfid_etc: string;
     timestamp: Date;
-    gateId: string;
+    gateId: GateId;
 }
 
 // Interface for Camera event data
 export interface ICameraEventData {
     license_plate: string;
     timestamp: Date;
-    gateId: string;
+    gateId: GateId;
     imageUrl?: string; // URL to image stored in cloud (e.g., Cloudinary)
 }
 
@@ -40,16 +53,15 @@ export interface IEvent extends Document {
     // Vehicle info (from license_plate lookup)
     license_plate: string;
     vehicle_id?: mongoose.Schema.Types.ObjectId; // Reference to vehicle document
-    feeRecord_id?: mongoose.Schema.Types.ObjectId;
     
     // Gate info
-    gateId: string;
+    gateId: GateId;
+    direction: Direction;
     
     // Event data
     rfidEvent?: IRfidEventData;
     cameraEvent?: ICameraEventData;
-    
-    
+     
     // Processing info
     failureReason?: string; // reason for failure if status is failed
     
@@ -88,14 +100,16 @@ const EventSchema = new Schema<IEvent>({
         ref: 'vehicle',
         required: false
     },
-    feeRecord_id: {
-        type: Schema.Types.ObjectId,
-        ref: 'fee_record',
-        required: false
-    },
     gateId: {
         type: String,
         required: true,
+        enum: Object.values(GateId),
+        index: true
+    },
+    direction: {
+        type: String,
+        required: true,
+        enum: Object.values(Direction),
         index: true
     },
     rfidEvent: {
@@ -109,7 +123,8 @@ const EventSchema = new Schema<IEvent>({
         },
         gateId: {
             type: String,
-            required: false
+            required: false,
+            enum: Object.values(GateId)
         }
     },
     cameraEvent: {
@@ -123,7 +138,8 @@ const EventSchema = new Schema<IEvent>({
         },
         gateId: {
             type: String,
-            required: false
+            required: false,
+            enum: Object.values(GateId)
         },
         imageUrl: {
             type: String,

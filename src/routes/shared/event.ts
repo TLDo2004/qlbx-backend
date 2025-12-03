@@ -4,9 +4,9 @@
  */
 
 import express from 'express';
-import { Event, EventType, EventStatus } from '../models';
-import { gateStaffAuth } from '../middleware';
-import { internalError, badRequest, success, notFound } from '../utils';
+import { Event, EventType, EventStatus, GateId, Direction } from '../../models';
+import { gateStaffAuth } from '../../middleware';
+import { internalError, badRequest, success, notFound } from '../../utils';
 
 const eventRouter = express.Router();
 
@@ -19,6 +19,7 @@ eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Re
     const eventType = req.query.eventType as string;
     const status = req.query.status as string;
     const gateId = req.query.gateId as string;
+    const direction = req.query.direction as string;
     const licensePlate = req.query.licensePlate as string;
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
@@ -49,7 +50,21 @@ eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Re
     }
     
     if (gateId) {
-      filter.gateId = gateId;
+      if (Object.values(GateId).includes(gateId as GateId)) {
+        filter.gateId = gateId;
+      } else {
+        badRequest(res, 'gateId không hợp lệ. Phải là "gate_in" hoặc "gate_out"');
+        return;
+      }
+    }
+    
+    if (direction) {
+      if (Object.values(Direction).includes(direction as Direction)) {
+        filter.direction = direction;
+      } else {
+        badRequest(res, 'direction không hợp lệ. Phải là "in" hoặc "out"');
+        return;
+      }
     }
     
     if (licensePlate) {
@@ -82,19 +97,6 @@ eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Re
           {
             path: 'routeId',
             select: 'name origin destination'
-          }
-        ]
-      })
-      .populate({
-        path: 'feeRecord_id',
-        select: 'vehicle_id fee_id transaction_id timestamp amount is_paid paid_at parking_time createdAt updatedAt',
-        populate: [
-          {
-            path: 'fee_id',
-            select: 'fee_name fee_type amount description'
-          },
-          {
-            path: 'transaction_id'
           }
         ]
       })
@@ -140,19 +142,6 @@ eventRouter.get('/:id', gateStaffAuth, async (req: express.Request, res: express
           {
             path: 'routeId',
             select: 'name origin destination'
-          }
-        ]
-      })
-      .populate({
-        path: 'feeRecord_id',
-        select: 'vehicle_id fee_id transaction_id timestamp amount is_paid paid_at parking_time createdAt updatedAt',
-        populate: [
-          {
-            path: 'fee_id',
-            select: 'fee_name fee_type amount description'
-          },
-          {
-            path: 'transaction_id'
           }
         ]
       });
@@ -231,18 +220,6 @@ eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: 
           select: 'name origin destination'
         }
       ]
-    }).populate({
-      path: 'feeRecord_id',
-      select: 'vehicle_id fee_id transaction_id timestamp amount is_paid paid_at parking_time createdAt updatedAt',
-      populate: [
-        {
-          path: 'fee_id',
-          select: 'fee_name fee_type amount description'
-        },
-        {
-          path: 'transaction_id'
-        }
-      ]
     });
 
     success(res, updatedEvent, 'Cập nhật trạng thái sự kiện thành công');
@@ -314,3 +291,4 @@ eventRouter.get('/stats/summary', gateStaffAuth, async (req: express.Request, re
 });
 
 export default eventRouter;
+

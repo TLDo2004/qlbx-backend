@@ -1,7 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { RfidEtc, Transaction, TransactionSource, TransactionType, Vehicle } from '../models';
-import { internalError } from '../utils';
+import { RfidEtc, Transaction, TransactionSource, TransactionType, Vehicle } from '../../models';
+import { internalError } from '../../utils';
 
 const transactionRouter = express.Router();
 
@@ -37,10 +37,15 @@ const applyTransactionEffect = async (
 
     const factor = direction === 'apply' ? 1 : -1;
 
-    if (type === TransactionType.CASH_IN) {
+    // TOPUP and REFUND increase balance, DEBIT decreases balance
+    // ADJUSTMENT can be positive (increase) or negative (decrease) based on amount sign
+    if (type === TransactionType.TOPUP || type === TransactionType.REFUND) {
         rfidEtc.balance += factor * amount;
-    } else {
+    } else if (type === TransactionType.DEBIT) {
         rfidEtc.balance -= factor * amount;
+    } else if (type === TransactionType.ADJUSTMENT) {
+        // ADJUSTMENT: amount can be positive or negative
+        rfidEtc.balance += factor * amount;
     }
 
     if (rfidEtc.balance < 0) {
@@ -57,6 +62,7 @@ transactionRouter.get('/', async (_req, res) => {
         const transactions = await Transaction.find()
             .populate('rfid_etc_id')
             .populate('perform_by')
+            .populate('related_fee_record_id')
             .sort({ createdAt: -1 });
 
         res.json({
@@ -84,7 +90,8 @@ transactionRouter.get('/:id', async (req, res) => {
 
         const transaction = await Transaction.findById(id)
             .populate('rfid_etc_id')
-            .populate('perform_by');
+            .populate('perform_by')
+            .populate('related_fee_record_id');
 
         if (!transaction) {
             res.status(404).json({
@@ -114,6 +121,7 @@ transactionRouter.post('/', async (req, res) => {
             amount,
             type,
             source,
+            related_fee_record_id,
             reference_code,
             perform_by,
             note
@@ -139,6 +147,14 @@ transactionRouter.post('/', async (req, res) => {
             res.status(400).json({
                 success: false,
                 error: 'perform_by không hợp lệ'
+            });
+            return;
+        }
+
+        if (related_fee_record_id && !isValidObjectId(related_fee_record_id)) {
+            res.status(400).json({
+                success: false,
+                error: 'related_fee_record_id không hợp lệ'
             });
             return;
         }
@@ -226,9 +242,10 @@ transactionRouter.post('/', async (req, res) => {
         const balance_before = rfidEtcDoc.balance;
         let balance_after = balance_before;
 
-        if (type === TransactionType.CASH_IN) {
+        // Calculate balance_after based on transaction type
+        if (type === TransactionType.TOPUP || type === TransactionType.REFUND) {
             balance_after += amount;
-        } else {
+        } else if (type === TransactionType.DEBIT) {
             if (amount > balance_before) {
                 res.status(400).json({
                     success: false,
@@ -237,26 +254,48 @@ transactionRouter.post('/', async (req, res) => {
                 return;
             }
             balance_after -= amount;
+        } else if (type === TransactionType.ADJUSTMENT) {
+            // ADJUSTMENT: amount can be positive (increase) or negative (decrease)
+            balance_after += amount;
+            if (balance_after < 0) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Số dư không đủ sau điều chỉnh'
+                });
+                return;
+            }
         }
 
         const normalizedNote = normalizeNote(note);
 
-        const transaction = await Transaction.create({
+        const transactionData: any = {
             rfid_etc_id: resolvedRfidEtcId,
             amount,
             type,
             source,
-            reference_code,
-            perform_by,
-            ...(normalizedNote !== undefined ? { note: normalizedNote } : {}),
             balance_before,
             balance_after
-        });
+        };
+
+        if (related_fee_record_id) {
+            transactionData.related_fee_record_id = new mongoose.Types.ObjectId(related_fee_record_id);
+        }
+        if (reference_code) {
+            transactionData.reference_code = reference_code;
+        }
+        if (perform_by) {
+            transactionData.perform_by = new mongoose.Types.ObjectId(perform_by);
+        }
+        if (normalizedNote !== undefined) {
+            transactionData.note = normalizedNote;
+        }
+
+        const transaction = await Transaction.create(transactionData);
 
         rfidEtcDoc.balance = balance_after;
         await rfidEtcDoc.save();
 
-        const populated = await transaction.populate(['rfid_etc_id', 'perform_by']);
+        const populated = await transaction.populate(['rfid_etc_id', 'perform_by', 'related_fee_record_id']);
 
         res.status(201).json({
             success: true,
@@ -305,6 +344,7 @@ transactionRouter.put('/:id', async (req, res) => {
             amount: req.body.amount ?? existing.amount,
             type: req.body.type ?? existing.type,
             source: req.body.source ?? existing.source,
+            related_fee_record_id: req.body.related_fee_record_id !== undefined ? req.body.related_fee_record_id : existing.related_fee_record_id,
             reference_code: req.body.reference_code ?? existing.reference_code,
             perform_by: req.body.perform_by ?? existing.perform_by,
             note: existing.note
@@ -315,10 +355,11 @@ transactionRouter.put('/:id', async (req, res) => {
         }
 
         if (!isValidObjectId(payload.rfid_etc_id.toString()) ||
-            (payload.perform_by && !isValidObjectId(payload.perform_by.toString()))) {
+            (payload.perform_by && !isValidObjectId(payload.perform_by.toString())) ||
+            (payload.related_fee_record_id && !isValidObjectId(payload.related_fee_record_id.toString()))) {
             res.status(400).json({
                 success: false,
-                error: 'rfid_etc_id hoặc perform_by không hợp lệ'
+                error: 'rfid_etc_id, perform_by hoặc related_fee_record_id không hợp lệ'
             });
             return;
         }
@@ -368,9 +409,10 @@ transactionRouter.put('/:id', async (req, res) => {
         const balance_before = targetRfidEtc.balance;
         let balance_after = balance_before;
 
-        if (payload.type === TransactionType.CASH_IN) {
+        // Calculate balance_after based on transaction type
+        if (payload.type === TransactionType.TOPUP || payload.type === TransactionType.REFUND) {
             balance_after += payload.amount;
-        } else {
+        } else if (payload.type === TransactionType.DEBIT) {
             if (payload.amount > balance_before) {
                 res.status(400).json({
                     success: false,
@@ -381,28 +423,46 @@ transactionRouter.put('/:id', async (req, res) => {
                 return;
             }
             balance_after -= payload.amount;
+        } else if (payload.type === TransactionType.ADJUSTMENT) {
+            // ADJUSTMENT: amount can be positive (increase) or negative (decrease)
+            balance_after += payload.amount;
+            if (balance_after < 0) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Số dư không đủ sau điều chỉnh'
+                });
+                // re-apply old effect before returning
+                await applyTransactionEffect(oldRfidEtcId, existing.type, existing.amount, 'apply');
+                return;
+            }
         }
 
         targetRfidEtc.balance = balance_after;
         await targetRfidEtc.save();
 
+        const updateData: any = {
+            rfid_etc_id: targetRfidEtcId,
+            amount: payload.amount,
+            type: payload.type,
+            source: payload.source,
+            reference_code: payload.reference_code,
+            perform_by: payload.perform_by,
+            note: payload.note,
+            balance_before,
+            balance_after
+        };
+
+        if (payload.related_fee_record_id !== undefined) {
+            updateData.related_fee_record_id = payload.related_fee_record_id 
+                ? new mongoose.Types.ObjectId(payload.related_fee_record_id)
+                : null;
+        }
+
         const updated = await Transaction.findByIdAndUpdate(
             id,
-            {
-                $set: {
-                    rfid_etc_id: targetRfidEtcId,
-                    amount: payload.amount,
-                    type: payload.type,
-                    source: payload.source,
-                    reference_code: payload.reference_code,
-                    perform_by: payload.perform_by,
-                    note: payload.note,
-                    balance_before,
-                    balance_after
-                }
-            },
+            { $set: updateData },
             { new: true, runValidators: true }
-        ).populate(['rfid_etc_id', 'perform_by']);
+        ).populate(['rfid_etc_id', 'perform_by', 'related_fee_record_id']);
 
         res.json({
             success: true,
@@ -498,5 +558,4 @@ transactionRouter.delete('/:id', async (req, res) => {
 });
 
 export default transactionRouter;
-
 

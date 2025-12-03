@@ -3,6 +3,7 @@ import { gateStaffAuth } from '../../middleware';
 import { badRequest, internalError } from '../../utils';
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
+import { GateId } from '../../models';
 import RfidBufferService from '../../services/_rfidBufferService';
 
 const rfidRouter = express.Router();
@@ -11,7 +12,7 @@ interface IRFIDStreamRequest extends express.Request {
   body: {
     comPort: string; // e.g. "COM5"
     baudRate?: number; // default 57600 for PK-201UT
-    gateId: string; // e.g. "gate_01_in", "gate_01_out"
+    gateId: GateId;
   };
 }
 
@@ -28,8 +29,8 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
       badRequest(res, 'BaudRate không hợp lệ');
       return;
     }
-    if (!gateId || typeof gateId !== 'string') {
-      badRequest(res, 'Thiếu hoặc trường gateId không hợp lệ');
+    if (!gateId || !Object.values(GateId).includes(gateId as GateId)) {
+      badRequest(res, 'gateId không hợp lệ. Phải là "gate_in" hoặc "gate_out"');
       return;
     }
 
@@ -127,7 +128,7 @@ rfidRouter.post('/alertStream', gateStaffAuth, async (req: IRFIDStreamRequest, r
                       const eventId = rfidBufferService.addRfidEvent({
                         rfid_etc: tag,
                         timestamp: new Date(),
-                        gateId: gateId
+                        gateId: gateId as GateId
                       });
                       
                       currentEpcAddedToBuffer = true;

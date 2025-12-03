@@ -1,6 +1,6 @@
 import express from 'express';
-import { RfidEtc } from '../models';
-import { internalError } from '../utils';
+import { RfidEtc } from '../../models';
+import { internalError } from '../../utils';
 
 interface IRfidEtcRequest extends express.Request {
   body: {
@@ -319,3 +319,4 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
 });
 
 export default rfidEtcRouter;
+

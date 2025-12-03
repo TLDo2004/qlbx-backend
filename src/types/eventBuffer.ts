@@ -3,13 +3,15 @@
  * Handles RFID and Camera event buffering and merging
  */
 
+import { GateId } from '../models';
+
 // RFID Event interface
 export interface IRfidEvent {
   id: string;
   timestamp: Date;
   rfid_etc: string;
   license_plate?: string; // Will be populated from vehicle lookup
-  gateId: string; // e.g., "gate_01_in", "gate_01_out"
+  gateId: GateId;
   processed: boolean;
 }
 
@@ -18,7 +20,7 @@ export interface ICameraEvent {
   id: string;
   timestamp: Date;
   license_plate: string;
-  gateId: string; // e.g., "gate_01_in", "gate_01_out"
+  gateId: GateId;
   imageData?: string; // base64 image data (optional)
   imageUrl?: string; // URL to image stored in cloud (optional)
   imagesReady?: boolean; // signals images have been collected/uploaded

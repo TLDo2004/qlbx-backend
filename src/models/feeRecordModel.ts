@@ -1,55 +1,52 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+export enum FeeRecordStatus {
+    PAID = 'paid',
+    PENDING = 'pending',
+    FAILED = 'failed'
+}
+
 export interface IFeeRecord extends Document {
+    parking_session_id?: mongoose.Schema.Types.ObjectId;
     vehicle_id: mongoose.Schema.Types.ObjectId;
-    fee_id: mongoose.Schema.Types.ObjectId;
-    transaction_id?: mongoose.Schema.Types.ObjectId;
-    timestamp: Date;
+    fee_rule_id: mongoose.Schema.Types.ObjectId;
     amount: number;
-    is_paid: boolean;
+    status: FeeRecordStatus;
     paid_at?: Date;
-    parking_time?: number; // Thời gian đỗ xe (phút)
     createdAt: Date;
     updatedAt: Date;
 }
 
 const FeeRecordSchema = new Schema<IFeeRecord>({
+    parking_session_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'parking_session',
+        required: false
+    },
     vehicle_id: {
         type: Schema.Types.ObjectId,
         ref: 'vehicle',
         required: true
     },
-    fee_id: {
+    fee_rule_id: {
         type: Schema.Types.ObjectId,
-        ref: 'fee',
+        ref: 'fee_rule',
         required: true
     },
-    transaction_id: {
-        type: Schema.Types.ObjectId,
-        ref: 'transaction',
-        required: false
-    },
-    timestamp: {
-        type: Date,
+    status: {
+        type: String,
         required: true,
-        default: Date.now
+        enum: Object.values(FeeRecordStatus),
+        default: FeeRecordStatus.PENDING
     },
     amount: {
         type: Number,
         required: true,
         min: 0
     },
-    is_paid: {
-        type: Boolean,
-        default: false
-    },
     paid_at: {
-        type: Date
-    },
-    parking_time: {
-        type: Number,
-        required: false,
-        min: 0
+        type: Date,
+        required: false
     }
 }, {
     timestamps: true,
@@ -57,7 +54,7 @@ const FeeRecordSchema = new Schema<IFeeRecord>({
     collection: 'fee_record'
 });
 
-FeeRecordSchema.index({ vehicle_id: 1, timestamp: -1 });
+FeeRecordSchema.index({ vehicle_id: 1, fee_rule_id: 1 });
 
 export const FeeRecord = mongoose.model<IFeeRecord>('fee_record', FeeRecordSchema, 'fee_record');
 
