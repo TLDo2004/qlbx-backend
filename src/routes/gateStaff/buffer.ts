@@ -4,14 +4,15 @@
  */
 
 import express from 'express';
-import RfidBufferService from '../services/_rfidBufferService';
-import CameraBufferService from '../services/_cameraBufferService';
-import { gateStaffAuth } from '../middleware';
-import { internalError, badRequest } from '../utils';
+import RfidBufferService from '../../services/_rfidBufferService';
+import CameraBufferService from '../../services/_cameraBufferService';
+import { GateId } from '../../models';
+import { gateStaffAuth } from '../../middleware';
+import { internalError, badRequest } from '../../utils';
 
 const bufferRouter = express.Router();
 
-// GET /buffer/status - Get buffer status
+// GET /gate-staff/buffer/status - Get buffer status
 bufferRouter.get('/status', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const rfidBufferService = RfidBufferService.getInstance();
@@ -38,7 +39,7 @@ bufferRouter.get('/status', gateStaffAuth, async (req: express.Request, res: exp
   }
 });
 
-// GET /buffer/rfid/events - Get all unprocessed RFID events
+// GET /gate-staff/buffer/rfid/events - Get all unprocessed RFID events
 bufferRouter.get('/rfid/events', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const rfidBufferService = RfidBufferService.getInstance();
@@ -57,18 +58,18 @@ bufferRouter.get('/rfid/events', gateStaffAuth, async (req: express.Request, res
   }
 });
 
-// GET /buffer/rfid/events/:gateId - Get RFID events by gate ID
+// GET /gate-staff/buffer/rfid/events/:gateId - Get RFID events by gate ID
 bufferRouter.get('/rfid/events/:gateId', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { gateId } = req.params;
     
-    if (!gateId) {
-      badRequest(res, 'ID cổng là bắt buộc');
+    if (!gateId || !Object.values(GateId).includes(gateId as GateId)) {
+      badRequest(res, 'ID cổng không hợp lệ. Phải là "gate_in" hoặc "gate_out"');
       return;
     }
 
     const rfidBufferService = RfidBufferService.getInstance();
-    const events = rfidBufferService.getRfidEventsByGate(gateId);
+    const events = rfidBufferService.getRfidEventsByGate(gateId as GateId);
     
     res.json({
       success: true,
@@ -84,7 +85,7 @@ bufferRouter.get('/rfid/events/:gateId', gateStaffAuth, async (req: express.Requ
   }
 });
 
-// POST /buffer/rfid/events - Add test RFID event (for testing)
+// POST /gate-staff/buffer/rfid/events - Add test RFID event (for testing)
 bufferRouter.post('/rfid/events', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { rfid_etc, gateId, license_plate } = req.body;
@@ -95,11 +96,16 @@ bufferRouter.post('/rfid/events', gateStaffAuth, async (req: express.Request, re
       return;
     }
 
+    if (!Object.values(GateId).includes(gateId as GateId)) {
+      badRequest(res, 'gateId không hợp lệ. Phải là "gate_in" hoặc "gate_out"');
+      return;
+    }
+
     const rfidBufferService = RfidBufferService.getInstance();
     const eventId = rfidBufferService.addRfidEvent({
       timestamp: new Date(),
       rfid_etc,
-      gateId,
+      gateId: gateId as GateId,
       license_plate
     });
     
@@ -119,7 +125,7 @@ bufferRouter.post('/rfid/events', gateStaffAuth, async (req: express.Request, re
   }
 });
 
-// PUT /buffer/rfid/events/:eventId/process - Mark RFID event as processed
+// PUT /gate-staff/buffer/rfid/events/:eventId/process - Mark RFID event as processed
 bufferRouter.put('/rfid/events/:eventId/process', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { eventId } = req.params;
@@ -149,7 +155,7 @@ bufferRouter.put('/rfid/events/:eventId/process', gateStaffAuth, async (req: exp
   }
 });
 
-// POST /buffer/config - Update buffer configuration
+// POST /gate-staff/buffer/config - Update buffer configuration
 bufferRouter.post('/config', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { deltaTimeThreshold, maxBufferSize, cleanupInterval } = req.body;
@@ -187,7 +193,7 @@ bufferRouter.post('/config', gateStaffAuth, async (req: express.Request, res: ex
   }
 });
 
-// DELETE /buffer/clear - Clear all events (for testing)
+// DELETE /gate-staff/buffer/clear - Clear all events (for testing)
 bufferRouter.delete('/clear', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const rfidBufferService = RfidBufferService.getInstance();
@@ -208,7 +214,7 @@ bufferRouter.delete('/clear', gateStaffAuth, async (req: express.Request, res: e
 
 // ===== CAMERA BUFFER ENDPOINTS =====
 
-// GET /buffer/camera/events - Get all unprocessed Camera events
+// GET /gate-staff/buffer/camera/events - Get all unprocessed Camera events
 bufferRouter.get('/camera/events', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const cameraBufferService = CameraBufferService.getInstance();
@@ -227,18 +233,18 @@ bufferRouter.get('/camera/events', gateStaffAuth, async (req: express.Request, r
   }
 });
 
-// GET /buffer/camera/events/:gateId - Get Camera events by gate ID
+// GET /gate-staff/buffer/camera/events/:gateId - Get Camera events by gate ID
 bufferRouter.get('/camera/events/:gateId', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { gateId } = req.params;
     
-    if (!gateId) {
-      badRequest(res, 'ID cổng là bắt buộc');
+    if (!gateId || !Object.values(GateId).includes(gateId as GateId)) {
+      badRequest(res, 'ID cổng không hợp lệ. Phải là "gate_in" hoặc "gate_out"');
       return;
     }
 
     const cameraBufferService = CameraBufferService.getInstance();
-    const events = cameraBufferService.getCameraEventsByGate(gateId);
+    const events = cameraBufferService.getCameraEventsByGate(gateId as GateId);
     
     res.json({
       success: true,
@@ -254,7 +260,7 @@ bufferRouter.get('/camera/events/:gateId', gateStaffAuth, async (req: express.Re
   }
 });
 
-// GET /buffer/camera/events/license/:licensePlate - Get Camera events by license plate
+// GET /gate-staff/buffer/camera/events/license/:licensePlate - Get Camera events by license plate
 bufferRouter.get('/camera/events/license/:licensePlate', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { licensePlate } = req.params;
@@ -281,7 +287,7 @@ bufferRouter.get('/camera/events/license/:licensePlate', gateStaffAuth, async (r
   }
 });
 
-// POST /buffer/camera/events - Add test Camera event (for testing)
+// POST /gate-staff/buffer/camera/events - Add test Camera event (for testing)
 bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { license_plate, gateId, imageData } = req.body;
@@ -289,6 +295,11 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
     // Validate required fields
     if (!license_plate || !gateId) {
       badRequest(res, 'Thiếu các trường bắt buộc: license_plate và gateId');
+      return;
+    }
+
+    if (!Object.values(GateId).includes(gateId as GateId)) {
+      badRequest(res, 'gateId không hợp lệ. Phải là "gate_in" hoặc "gate_out"');
       return;
     }
 
@@ -303,7 +314,7 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
 
     if (base64String) {
       // Convert base64 string to buffer and upload to Cloudinary
-      const { uploadBufferToCloudinary } = await import('../utils');
+      const { uploadBufferToCloudinary } = await import('../../utils');
       const commaIdx = base64String.indexOf(',');
       const pureBase64 = commaIdx !== -1 ? base64String.substring(commaIdx + 1) : base64String;
       const buffer = Buffer.from(pureBase64, 'base64');
@@ -313,7 +324,7 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
     const eventId = cameraBufferService.addCameraEvent({
       timestamp: new Date(),
       license_plate,
-      gateId,
+      gateId: gateId as GateId,
       imageData: undefined,
       imageUrl
     });
@@ -334,7 +345,7 @@ bufferRouter.post('/camera/events', gateStaffAuth, async (req: express.Request, 
   }
 });
 
-// PUT /buffer/camera/events/:eventId/process - Mark Camera event as processed
+// PUT /gate-staff/buffer/camera/events/:eventId/process - Mark Camera event as processed
 bufferRouter.put('/camera/events/:eventId/process', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { eventId } = req.params;
@@ -365,3 +376,5 @@ bufferRouter.put('/camera/events/:eventId/process', gateStaffAuth, async (req: e
 });
 
 export default bufferRouter;
+
+

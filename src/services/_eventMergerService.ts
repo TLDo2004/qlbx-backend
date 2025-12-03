@@ -8,7 +8,7 @@ import { EventType, EventStatus } from '../models';
 import { Vehicle } from '../models/vehicleModel';
 import { RfidEtc } from '../models/rfidEtcModels';
 import { IRfidEvent, ICameraEvent } from '../types/eventBuffer';
-import EventCreationService, { EventCreationError } from './eventCreationService';
+import EventCreationService, { EventCreationError } from './_eventCreationService';
 
 class EventMergerService {
   private static instance: EventMergerService;

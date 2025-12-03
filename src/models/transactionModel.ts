@@ -1,8 +1,10 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export enum TransactionType {
-    CASH_IN = 'cash_in',
-    CASH_OUT = 'cash_out'
+    TOPUP = 'topup',
+    DEBIT = 'debit',
+    REFUND = 'refund',
+    ADJUSTMENT = 'adjustment'
 }
 
 export enum TransactionSource {
@@ -16,6 +18,7 @@ export interface ITransaction extends Document {
     rfid_etc_id: mongoose.Schema.Types.ObjectId;
     amount: number;
     type: TransactionType;
+    related_fee_record_id?: mongoose.Schema.Types.ObjectId;
     source: TransactionSource;
     reference_code?: string;
     perform_by?: mongoose.Schema.Types.ObjectId;
@@ -41,6 +44,11 @@ const TransactionSchema = new Schema<ITransaction>({
         type: String,
         enum: Object.values(TransactionType),
         required: true
+    },
+    related_fee_record_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'fee_record',
+        required: false
     },
     source: {
         type: String,

@@ -4,13 +4,13 @@
  */
 
 import express from 'express';
-import EventMergerService from '../services/_eventMergerService';
-import { gateStaffAuth } from '../middleware';
-import { internalError, badRequest, success } from '../utils';
+import EventMergerService from '../../services/_eventMergerService';
+import { gateStaffAuth } from '../../middleware';
+import { internalError, badRequest, success } from '../../utils';
 
 const eventMergerRouter = express.Router();
 
-// GET /event-merger/status - Get merger service status
+// GET /gate-staff/event-merger/status - Get merger service status
 eventMergerRouter.get('/status', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const eventMergerService = EventMergerService.getInstance();
@@ -23,7 +23,7 @@ eventMergerRouter.get('/status', gateStaffAuth, async (req: express.Request, res
   }
 });
 
-// POST /event-merger/start - Start the merger service
+// POST /gate-staff/event-merger/start - Start the merger service
 eventMergerRouter.post('/start', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const eventMergerService = EventMergerService.getInstance();
@@ -37,7 +37,7 @@ eventMergerRouter.post('/start', gateStaffAuth, async (req: express.Request, res
   }
 });
 
-// POST /event-merger/stop - Stop the merger service
+// POST /gate-staff/event-merger/stop - Stop the merger service
 eventMergerRouter.post('/stop', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const eventMergerService = EventMergerService.getInstance();
@@ -51,7 +51,7 @@ eventMergerRouter.post('/stop', gateStaffAuth, async (req: express.Request, res:
   }
 });
 
-// POST /event-merger/config - Update merger configuration
+// POST /gate-staff/event-merger/config - Update merger configuration
 eventMergerRouter.post('/config', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { mergeInterval, deltaTimeThreshold, maxRetries, retryDelay } = req.body;
@@ -102,7 +102,7 @@ eventMergerRouter.post('/config', gateStaffAuth, async (req: express.Request, re
   }
 });
 
-// POST /event-merger/merge - Manual merge operation
+// POST /gate-staff/event-merger/merge - Manual merge operation
 eventMergerRouter.post('/merge', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const eventMergerService = EventMergerService.getInstance();
@@ -116,3 +116,5 @@ eventMergerRouter.post('/merge', gateStaffAuth, async (req: express.Request, res
 });
 
 export default eventMergerRouter;
+
+

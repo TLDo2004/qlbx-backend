@@ -5,6 +5,8 @@ import { GateStaff } from '../../models/gateStaffModel';
 import anprRouter from './anpr';
 import rfidRouter from './rfidReader';
 import videoStreamRouter from './videoStream';
+import bufferRouter from './buffer';
+import eventMergerRouter from './eventMerger';
 import multer from 'multer';
 import { uploadBufferToCloudinary } from '../../utils/cloudinary';
 
@@ -213,5 +215,11 @@ gateStaffRouter.use('/rfid', rfidRouter);
 
 // Use video stream routes
 gateStaffRouter.use('/video-stream', videoStreamRouter);
+
+// Use buffer routes
+gateStaffRouter.use('/buffer', bufferRouter);
+
+// Use event merger routes
+gateStaffRouter.use('/event-merger', eventMergerRouter);
 
 export default gateStaffRouter;

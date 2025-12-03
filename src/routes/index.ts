@@ -2,14 +2,7 @@ import express from 'express';
 import employeeRouter from './employee';
 import { auth, employeeAuth, gateStaffAuth } from '../middleware/index';
 import gateStaffRouter from './gateStaff';
-import vehicleRouter from './vehicle';
-import rfidEtcRouter from './rfidEtc';
-import bufferRouter from './buffer';
-import eventRouter from './event';
-import eventMergerRouter from './eventMerger';
-import feeRouter from './fee';
-import feeRecordRouter from './feeRecord';
-import transactionRouter from './transaction';
+import sharedRouter from './shared';
 
 
 const router = express.Router();
@@ -17,13 +10,6 @@ const router = express.Router();
 // Mount the route groups with authentication
 router.use('/employee', auth, employeeAuth, employeeRouter);
 router.use('/gate-staff', auth, gateStaffAuth, gateStaffRouter);
-router.use('/vehicle', auth, vehicleRouter);
-router.use('/rfid-etc', auth, rfidEtcRouter);
-router.use('/buffer', auth, gateStaffAuth, bufferRouter);
-router.use('/event', auth, gateStaffAuth, eventRouter);
-router.use('/event-merger', auth, gateStaffAuth, eventMergerRouter);
-router.use('/fee', auth, feeRouter);
-router.use('/fee-record', auth, feeRecordRouter);
-router.use('/transaction', auth, transactionRouter);
+router.use('/shared', auth, sharedRouter);
 
 export default router;

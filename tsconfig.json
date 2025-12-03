@@ -13,7 +13,7 @@
       "noImplicitAny": false,
       "sourceMap": true,
       "strictNullChecks": false,
-      "types": []
+      "types": ["node"]
     },
     "compileOnSave": true,
     "include": ["src/**/*"]

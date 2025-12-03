@@ -1,7 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { Vehicle, VehicleType, VehicleGateStatus, BusCompany } from '../models';
-import { internalError } from '../utils';
+import { Vehicle, VehicleType, VehicleGateStatus, BusCompany } from '../../models';
+import { internalError } from '../../utils';
 
 interface IVehicleRequest extends express.Request {
   body: {
@@ -255,7 +255,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     // Check if rfid_etc exists in rfid_etc collection and if it's already assigned (if provided)
     if (rfid_etc) {
       // First check if rfid_etc exists in rfid_etc collection
-      const { RfidEtc } = await import('../models');
+      const { RfidEtc } = await import('../../models');
       const existingRfidEtc = await RfidEtc.findOne({ 
         rfid_etc: rfid_etc.trim()
       });
@@ -409,7 +409,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     // Check if rfid_etc is being updated and if it exists in rfid_etc collection
     if (rfid_etc && rfid_etc !== existingVehicle.rfid_etc) {
       // First check if rfid_etc exists in rfid_etc collection
-      const { RfidEtc } = await import('../models');
+      const { RfidEtc } = await import('../../models');
       const existingRfidEtc = await RfidEtc.findOne({ 
         rfid_etc: rfid_etc.trim()
       });
@@ -522,3 +522,4 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
 });
 
 export default vehicleRouter;
+
