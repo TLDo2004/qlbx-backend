@@ -364,11 +364,21 @@ class VideoStreamService {
         const files = fs.readdirSync(outputDir);
         const segmentFiles = files
           .filter(file => file.endsWith('.ts'))
-          .map(file => ({
-            name: file,
-            path: path.join(outputDir, file),
-            mtime: fs.statSync(path.join(outputDir, file)).mtime.getTime()
-          }))
+          .map(file => {
+            const fullPath = path.join(outputDir, file);
+            try {
+              const stats = fs.statSync(fullPath);
+              return {
+                name: file,
+                path: fullPath,
+                mtime: stats.mtime.getTime()
+              };
+            } catch {
+              // File có thể đã bị FFmpeg xóa/lock, bỏ qua để tránh lỗi EPERM
+              return null;
+            }
+          })
+          .filter((entry): entry is { name: string; path: string; mtime: number } => entry !== null)
           .sort((a, b) => b.mtime - a.mtime); // Sort by modification time, newest first
         
         // Keep only the 3 most recent segments (matching hls_list_size)
