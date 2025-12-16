@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { Event, EventType, EventStatus, GateId, Direction } from '../../models';
+import { Event, EventType, EventStatus, GateId, Direction, ParkingSession, FeeRecord } from '../../models';
 import { gateStaffAuth } from '../../middleware';
 import { internalError, badRequest, success, notFound } from '../../utils';
 
@@ -104,8 +104,39 @@ eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Re
       .skip(skip)
       .limit(limit);
 
+    // Populate fee records for each event through parking_session
+    // Fee records are only created for exit events (gate_out), so only check exit events
+    const eventsWithFeeRecords = await Promise.all(
+      events.map(async (event) => {
+        const eventObj: any = event.toObject();
+        
+        // Only find fee record for exit events (direction === 'out')
+        // Fee is calculated and recorded when vehicle exits
+        if (event.direction === 'out') {
+          // Find parking session with exit_event_id matching this event
+          const parkingSession = await ParkingSession.findOne({ exit_event_id: event._id });
+
+          // If parking session found, find fee record linked to that session
+          if (parkingSession) {
+            const feeRecord = await FeeRecord.findOne({ parking_session_id: parkingSession._id })
+              .populate({
+                path: 'fee_rule_id',
+                select: 'name min_seat max_seat amount is_active'
+              });
+            
+            if (feeRecord) {
+              eventObj.feeRecord_id = feeRecord.toObject();
+            }
+          }
+        }
+        // For entry events (direction === 'in'), no fee record exists yet
+
+        return eventObj;
+      })
+    );
+
     success(res, {
-      events,
+      events: eventsWithFeeRecords,
       pagination: {
         currentPage: page,
         totalPages: totalPages,
@@ -151,7 +182,31 @@ eventRouter.get('/:id', gateStaffAuth, async (req: express.Request, res: express
       return;
     }
 
-    success(res, event, 'Lấy thông tin sự kiện thành công');
+    // Populate fee record for this event through parking_session
+    // Fee records are only created for exit events (gate_out)
+    const eventObj: any = event.toObject();
+    
+    // Only find fee record for exit events (direction === 'out')
+    if (event.direction === 'out') {
+      // Find parking session with exit_event_id matching this event
+      const parkingSession = await ParkingSession.findOne({ exit_event_id: event._id });
+
+      // If parking session found, find fee record linked to that session
+      if (parkingSession) {
+        const feeRecord = await FeeRecord.findOne({ parking_session_id: parkingSession._id })
+          .populate({
+            path: 'fee_rule_id',
+            select: 'name min_seat max_seat amount is_active'
+          });
+        
+        if (feeRecord) {
+          eventObj.feeRecord_id = feeRecord.toObject();
+        }
+      }
+    }
+    // For entry events (direction === 'in'), no fee record exists yet
+
+    success(res, eventObj, 'Lấy thông tin sự kiện thành công');
   } catch (error: any) {
     console.error('Error fetching event:', error);
     internalError(res, 'Không thể lấy thông tin sự kiện');
