@@ -152,21 +152,16 @@ class EventMergerService {
    */
   private async processRfidEventFIFO(rfidEvent: IRfidEvent, cameraEvents: ICameraEvent[]): Promise<void> {
     try {
+      // Nếu event đã được xử lý ở bước khác (vd: đã merge với camera) thì bỏ qua
+      if (rfidEvent.processed) {
+        return;
+      }
       // Populate license_plate from database if not already set
       if (!rfidEvent.license_plate) {
         const vehicle = await this.lookupVehicleByRfid(rfidEvent.rfid_etc);
         if (vehicle) {
           rfidEvent.license_plate = vehicle.license_plate;
         }
-      }
-
-      // Check if event is expired
-      if (this.isEventExpired(rfidEvent.timestamp)) {
-        await this.createRfidOnlyEvent(rfidEvent);
-        const rfidBufferService = RfidBufferService.getInstance();
-        rfidBufferService.markRfidEventAsProcessed(rfidEvent.id); // Mark as processed first
-        console.log(`Created RFID-only event for ${rfidEvent.license_plate}`);
-        return;
       }
 
       // Find matching camera events
@@ -186,6 +181,15 @@ class EventMergerService {
         cameraBufferService.markCameraEventAsProcessed(bestMatch.id);
         
         console.log(`Merged RFID event ${rfidEvent.rfid_etc} with Camera event ${bestMatch.license_plate}`);
+        return;
+      }
+
+      // If no matching camera event and this RFID event is too old, create RFID-only
+      if (this.isEventExpired(rfidEvent.timestamp)) {
+        await this.createRfidOnlyEvent(rfidEvent);
+        const rfidBufferService = RfidBufferService.getInstance();
+        rfidBufferService.markRfidEventAsProcessed(rfidEvent.id); // Mark as processed first
+        console.log(`Created RFID-only event for ${rfidEvent.license_plate}`);
       }
     } catch (error) {
       console.error(`Error processing RFID event ${rfidEvent.rfid_etc}:`, error);
@@ -197,15 +201,10 @@ class EventMergerService {
    */
   private async processCameraEventFIFO(cameraEvent: ICameraEvent, rfidEvents: IRfidEvent[]): Promise<void> {
     try {
-      // Check if event is expired
-      if (this.isEventExpired(cameraEvent.timestamp)) {
-        await this.createCameraOnlyEvent(cameraEvent);
-        const cameraBufferService = CameraBufferService.getInstance();
-        cameraBufferService.markCameraEventAsProcessed(cameraEvent.id); // Mark as processed first
-        console.log(`Created Camera-only event for ${cameraEvent.license_plate}`);
+      // Nếu event đã được xử lý ở bước khác (vd: đã merge với RFID) thì bỏ qua
+      if (cameraEvent.processed) {
         return;
       }
-
       // Do not block merging by image readiness; images can arrive later
 
       // Find matching RFID events (tolerate missing rfid license by lookup)
@@ -246,8 +245,17 @@ class EventMergerService {
         cameraBufferService.markCameraEventAsProcessed(cameraEvent.id);
         
         console.log(`Merged Camera event ${cameraEvent.license_plate} with RFID event ${bestMatch.license_plate}`);
+        return;
       }
-      // If no matching RFID events found, wait for expiration to allow time for RFID events to arrive
+
+      // Nếu chưa match RFID nào, chỉ khi sự kiện đã quá cũ mới tạo camera-only
+      if (this.isEventExpired(cameraEvent.timestamp)) {
+        await this.createCameraOnlyEvent(cameraEvent);
+        const cameraBufferService = CameraBufferService.getInstance();
+        cameraBufferService.markCameraEventAsProcessed(cameraEvent.id); // Mark as processed first
+        console.log(`Created Camera-only event for ${cameraEvent.license_plate}`);
+      }
+      // Nếu chưa hết hạn thì giữ trong buffer chờ lần merge tiếp theo
     } catch (error) {
       console.error(`Error processing Camera event ${cameraEvent.license_plate}:`, error);
     }
