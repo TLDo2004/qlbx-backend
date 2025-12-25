@@ -17,6 +17,7 @@ import {
   TransactionSource
 } from '../models';
 import { IRfidEventData, ICameraEventData } from '../models/eventModel';
+import { io } from '../api';
 
 export type EventCreationErrorCode = 'BAD_REQUEST' | 'INTERNAL_ERROR';
 
@@ -56,6 +57,7 @@ export class EventCreationService {
    * - saveEvent (lưu event vào DB)
    * - nếu direction = OUT thì handleExitEvent(event)
    * - ngược lại handleEntryEvent(event)
+   * - emit event qua WebSocket để frontend cập nhật real-time
    */
   public static async createEvent(
     payload: EventCreationPayload,
@@ -63,11 +65,37 @@ export class EventCreationService {
   ): Promise<EventCreationResult> {
     const { event } = await this.saveEvent(payload, options);
 
+    let result: EventCreationResult;
     if (event.direction === Direction.OUT) {
-      return this.handleExitEvent(event);
+      result = await this.handleExitEvent(event);
+    } else {
+      result = await this.handleEntryEvent(event);
     }
 
-    return this.handleEntryEvent(event);
+    // Populate event đầy đủ trước khi emit
+    const populatedEvent = await Event.findById(event._id)
+      .populate({
+        path: 'vehicle_id',
+        populate: [
+          {
+            path: 'companyId',
+            select: 'name tax_code address phone contract_start contract_end is_active'
+          },
+          {
+            path: 'routeId',
+            select: 'name origin destination'
+          }
+        ]
+      })
+      .lean();
+
+    // Emit event qua WebSocket để frontend cập nhật real-time
+    if (populatedEvent && io) {
+      io.emit('new_event', populatedEvent);
+      console.log('[WebSocket] Emitted new event:', populatedEvent._id?.toString());
+    }
+
+    return result;
   }
 
   /**

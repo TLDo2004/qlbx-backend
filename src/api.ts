@@ -1,9 +1,18 @@
 import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import mongoService from './services/_mongoservice';
 import routes from './routes';
 
 export const app = express();
+export const httpServer = createServer(app);
+export const io = new Server(httpServer, {
+  cors: {
+    origin: true,
+    credentials: true
+  }
+});
 
 app.use(cors({ origin: true }));
 
