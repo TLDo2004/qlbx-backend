@@ -347,15 +347,11 @@ export class EventCreationService {
       throw new EventCreationError('BAD_REQUEST', 'handleExitEvent chỉ dùng cho gate_out');
     }
 
-    // Nếu event không phải "passed" (ACCEPTED) thì không tính phí
-    if (event.status !== EventStatus.ACCEPTED) {
-      return { event };
-    }
-
+    // Tạo fee_record cho tất cả event status, không chỉ ACCEPTED
     if (!event.vehicle_id) {
       await this.updateEventStatus(event._id, {
         status: EventStatus.FAILED,
-        failureReason: 'NO_VEHICLE_FOR_EXIT_EVENT'
+        failureReason: 'Không có thông tin xe'
       });
       return { event };
     }
@@ -365,7 +361,7 @@ export class EventCreationService {
     if (!session) {
       const updatedEvent = await this.updateEventStatus(event._id, {
         status: EventStatus.FAILED,
-        failureReason: 'NO_OPEN_SESSION'
+        failureReason: 'Chưa ghi nhận xe vào bến'
       });
       return { event: updatedEvent ?? event };
     }
@@ -377,83 +373,111 @@ export class EventCreationService {
     if (!feeRule) {
       const updatedEvent = await this.updateEventStatus(event._id, {
         status: EventStatus.FAILED,
-        failureReason: 'NO_FEE_RULE_FOR_SEAT'
+        failureReason: 'Không có biểu phí thích hợp'
       });
       return { event: updatedEvent ?? event };
     }
 
     const amount: number = feeRule.amount;
 
-    // Lấy mã RFID/ETC từ vehicle, sau đó lookup document RFID trong collection riêng
-    const rfidCode: string | undefined = vehicle?.rfid_etc;
-    if (!rfidCode) {
-      const updatedEvent = await this.updateEventStatus(event._id, {
-        status: EventStatus.FAILED,
-        failureReason: 'NO_RFID_BALANCE_INFO'
-      });
-      return { event: updatedEvent ?? event, feeRule };
-    }
-
-    const rfidEtc = await RfidEtc.findOne({ rfid_etc: rfidCode });
-    if (!rfidEtc || typeof rfidEtc.balance !== 'number') {
-      const updatedEvent = await this.updateEventStatus(event._id, {
-        status: EventStatus.FAILED,
-        failureReason: 'NO_RFID_BALANCE_INFO'
-      });
-      return { event: updatedEvent ?? event, feeRule };
-    }
-
-    // Nếu balance không đủ
-    if (rfidEtc.balance < amount) {
-      const updatedEvent = await this.updateEventStatus(event._id, {
-        status: EventStatus.REJECTED,
-        failureReason: 'INSUFFICIENT_BALANCE'
-      });
-      return { event: updatedEvent ?? event, feeRule };
-    }
-
-    // Đóng session
+    // Đóng session (cho tất cả event status)
     const closedSession = await this.closeParkingSession({
       vehicle_id: event.vehicle_id,
       exit_event_id: event._id,
       exit_time: event.timestamp
     });
 
-    // Tạo fee record
+    // Tạo fee record cho tất cả event status
     const feeRecord = await this.createFeeRecord({
       parking_session_id: closedSession?._id ?? session._id,
       vehicle_id: event.vehicle_id,
       fee_rule_id: feeRule._id,
-      amount
-    });
-
-    // Tính balance mới và cập nhật vào tài khoản RFID/ETC
-    const balance_before = rfidEtc.balance;
-    const balance_after = rfidEtc.balance - amount;
-
-    const transaction = await this.createTransaction({
-      rfid_etc_id: rfidEtc._id,
       amount,
-      related_fee_record_id: feeRecord._id,
-      balance_before,
-      balance_after
+      status: FeeRecordStatus.PENDING // Mặc định là pending
     });
 
-    // Cập nhật balance thực tế trong collection rfid_etc
-    rfidEtc.balance = balance_after;
-    await rfidEtc.save();
+    // Kiểm tra RFID/ETC và balance để quyết định thanh toán
+    const rfidCode: string | undefined = vehicle?.rfid_etc;
+    let transaction: any = null;
+    let updatedFeeRecord = feeRecord;
+    let updatedEvent = event;
 
-    // Update fee record thành paid
-    const updatedFeeRecord = await this.updateFeeRecord(feeRecord._id, {
-      status: FeeRecordStatus.PAID,
-      paid_at: new Date()
-    });
+    // Chỉ thanh toán nếu có RFID/ETC, balance đủ và card còn hiệu lực
+    if (rfidCode) {
+      const rfidEtc = await RfidEtc.findOne({ rfid_etc: rfidCode });
+      
+      if (!rfidEtc) {
+        // Không tìm thấy RFID/ETC trong database
+        updatedEvent = await this.updateEventStatus(event._id, {
+          status: EventStatus.FAILED,
+          failureReason: 'Không có thông tin số dư RFID'
+        }) ?? event;
+        // Fee record vẫn ở trạng thái PENDING - nhân viên sẽ thu thủ công và cập nhật
+      } else {
+        // Kiểm tra expiration_date - card phải còn hiệu lực (expiration_date > now)
+        const now = new Date();
+        const expirationDate = rfidEtc.expiration_date instanceof Date 
+          ? rfidEtc.expiration_date 
+          : new Date(rfidEtc.expiration_date);
+        const isExpired = expirationDate <= now;
+
+        if (isExpired) {
+          // RFID/ETC đã hết hạn
+          updatedEvent = await this.updateEventStatus(event._id, {
+            status: EventStatus.ETC_ERROR,
+            failureReason: 'Thẻ RFID đã hết hạn'
+          }) ?? event;
+          // Fee record vẫn ở trạng thái PENDING - nhân viên sẽ thu thủ công và cập nhật
+        } else if (typeof rfidEtc.balance !== 'number' || rfidEtc.balance < amount) {
+          // RFID/ETC còn hiệu lực nhưng balance không đủ
+          updatedEvent = await this.updateEventStatus(event._id, {
+            status: EventStatus.FAILED,
+            failureReason: 'Số dư không đủ'
+          }) ?? event;
+          // Fee record vẫn ở trạng thái PENDING - nhân viên sẽ thu thủ công và cập nhật
+        } else {
+          // RFID/ETC còn hiệu lực và balance đủ - thanh toán ngay
+          const balance_before = rfidEtc.balance;
+          const balance_after = rfidEtc.balance - amount;
+
+          transaction = await this.createTransaction({
+            rfid_etc_id: rfidEtc._id,
+            amount,
+            related_fee_record_id: feeRecord._id,
+            balance_before,
+            balance_after
+          });
+
+          // Cập nhật balance thực tế trong collection rfid_etc
+          rfidEtc.balance = balance_after;
+          await rfidEtc.save();
+
+          // Update fee record thành paid
+          updatedFeeRecord = await this.updateFeeRecord(feeRecord._id, {
+            status: FeeRecordStatus.PAID,
+            paid_at: new Date()
+          });
+
+          // Cập nhật event status thành ACCEPTED khi đã thanh toán thành công
+          updatedEvent = await this.updateEventStatus(event._id, {
+            status: EventStatus.ACCEPTED
+          }) ?? event;
+        }
+      }
+    } else {
+      // Không có RFID/ETC - đánh dấu event status là NO_ETC
+      // Fee record ở trạng thái PENDING - nhân viên sẽ thu thủ công và cập nhật
+      updatedEvent = await this.updateEventStatus(event._id, {
+        status: EventStatus.NO_ETC,
+        failureReason: 'Không có thẻ RFID/ETC'
+      }) ?? event;
+    }
 
     return {
-      event,
+      event: updatedEvent,
       parkingSession: closedSession ?? session,
       feeRule,
-      feeRecord: updatedFeeRecord ?? feeRecord,
+      feeRecord: updatedFeeRecord,
       transaction
     };
   }
@@ -543,14 +567,15 @@ export class EventCreationService {
     vehicle_id: any;
     fee_rule_id: any;
     amount: number;
+    status?: FeeRecordStatus;
   }) {
-    const { parking_session_id, vehicle_id, fee_rule_id, amount } = params;
+    const { parking_session_id, vehicle_id, fee_rule_id, amount, status } = params;
     return FeeRecord.create({
       parking_session_id,
       vehicle_id,
       fee_rule_id,
       amount,
-      status: FeeRecordStatus.PENDING
+      status: status ?? FeeRecordStatus.PENDING
     });
   }
 

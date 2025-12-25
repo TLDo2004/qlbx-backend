@@ -378,7 +378,7 @@ class EventMergerService {
           // License plates don't match => rejected
           return {
             status: EventStatus.REJECTED,
-            failureReason: 'License plate mismatch between RFID and Camera'
+            failureReason: 'Biển số không khớp giữa RFID và Camera'
           };
         }
       }
@@ -387,7 +387,7 @@ class EventMergerService {
       if (rfidExists && vehicleByRfidExists && vehicleByLicensePlateExists && rfidExpired) {
         return {
           status: EventStatus.ETC_ERROR,
-          failureReason: 'RFID detected but expired',
+          failureReason: 'Thẻ RFID đã hết hạn',
           vehicle_id: vehicleByRfid?._id?.toString(),
           license_plate: vehicleByRfid?.license_plate
         };
@@ -397,7 +397,7 @@ class EventMergerService {
       if (rfidExists && !vehicleByRfidExists && vehicleByLicensePlateExists) {
         return {
           status: EventStatus.ETC_ERROR,
-          failureReason: 'RFID not found in database but vehicle exists'
+          failureReason: 'Xe đã đăng ký nhưng chưa dán thẻ RFID'
         };
       }
 
@@ -405,7 +405,7 @@ class EventMergerService {
       if (rfidExists && vehicleByRfidExists && !vehicleByLicensePlateExists && !rfidExpired) {
         return {
           status: EventStatus.REJECTED,
-          failureReason: 'License plate not found in database'
+          failureReason: 'Không tìm thấy biển số trong hệ thống'
         };
       }
 
@@ -413,7 +413,7 @@ class EventMergerService {
       if (rfidExists && !vehicleByRfidExists && !vehicleByLicensePlateExists) {
         return {
           status: EventStatus.REJECTED,
-          failureReason: 'New vehicle - both RFID and license plate not found'
+          failureReason: 'Xe mới - lần đầu vào bến'
         };
       }
     }
@@ -442,7 +442,7 @@ class EventMergerService {
       if (rfidExists && vehicleByRfidExists && rfidExpired) {
         return {
           status: EventStatus.ETC_ERROR,
-          failureReason: 'RFID detected but expired',
+          failureReason: 'Thẻ RFID đã hết hạn',
           vehicle_id: vehicleByRfid?._id?.toString(),
           license_plate: vehicleByRfid?.license_plate // Get license plate from vehicle
         };
@@ -452,7 +452,7 @@ class EventMergerService {
       if (rfidExists && !vehicleByRfidExists) {
         return {
           status: EventStatus.REJECTED,
-          failureReason: 'New vehicle - RFID not found in database'
+          failureReason: 'Xe mới - lần đầu vào bến'
         };
       }
     }
@@ -466,7 +466,7 @@ class EventMergerService {
       if (vehicleByLicensePlateExists) {
         return {
           status: EventStatus.NO_ETC,
-          failureReason: 'No RFID/ETC detected but vehicle exists',
+          failureReason: 'Xe đã đăng ký nhưng chưa dán thẻ RFID',
           vehicle_id: vehicleByLicensePlate?._id?.toString()
         };
       }
@@ -474,14 +474,14 @@ class EventMergerService {
       // License plate not in database => rejected (new vehicle)
       return {
         status: EventStatus.REJECTED,
-        failureReason: 'New vehicle - license plate not found in database'
+        failureReason: 'Xe mới - lần đầu vào bến'
       };
     }
 
     // Default case
     return {
       status: EventStatus.REJECTED,
-      failureReason: 'Unknown event type or missing data'
+      failureReason: 'Lỗi hệ thống'
     };
   }
   /**
