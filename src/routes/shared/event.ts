@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { Event, EventType, EventStatus, GateId, Direction, ParkingSession, FeeRecord } from '../../models';
+import { Event, EventType, EventStatus, GateId, Direction, ParkingSession, FeeRecord, FeeRecordStatus } from '../../models';
 import { gateStaffAuth } from '../../middleware';
 import { internalError, badRequest, success, notFound } from '../../utils';
 
@@ -242,14 +242,47 @@ eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: 
       return;
     }
 
+    // Validation: Đối với exit event (gate_out), chỉ cho phép mở cổng (ACCEPTED) khi fee_record đã PAID
+    if (status === EventStatus.ACCEPTED && event.gateId === GateId.GATE_OUT && event.direction === 'out') {
+      // Tìm parking session và fee_record liên quan
+      const parkingSession = await ParkingSession.findOne({ exit_event_id: event._id });
+      
+      if (parkingSession) {
+        const feeRecord = await FeeRecord.findOne({ parking_session_id: parkingSession._id });
+        
+        if (!feeRecord) {
+          res.status(400).json({
+            success: false,
+            error: 'Không thể mở cổng: Chưa có fee record. Vui lòng đợi hệ thống xử lý.'
+          });
+          return;
+        }
+        
+        if (feeRecord.status !== FeeRecordStatus.PAID) {
+          res.status(400).json({
+            success: false,
+            error: `Không thể mở cổng: Fee record chưa được thanh toán (status: ${feeRecord.status}). Vui lòng cập nhật fee record thành PAID trước khi mở cổng.`
+          });
+          return;
+        }
+      }
+    }
+
     // Prepare update data
     const updateData: any = {
       status,
       updatedAt: new Date()
     };
 
-    if ((status === EventStatus.ETC_ERROR || status === EventStatus.REJECTED) && failureReason) {
-      updateData.failureReason = failureReason;
+    // Handle failureReason: set if provided for ETC_ERROR/REJECTED, clear if explicitly null
+    if (failureReason !== undefined) {
+      if (failureReason === null || failureReason === '') {
+        // Clear failureReason if explicitly set to null or empty string
+        updateData.failureReason = null;
+      } else if ((status === EventStatus.ETC_ERROR || status === EventStatus.REJECTED) && failureReason) {
+        // Set failureReason for ETC_ERROR or REJECTED status
+        updateData.failureReason = failureReason;
+      }
     }
 
     // Optionally update cameraEvent.imageUrl later
