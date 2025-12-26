@@ -40,8 +40,8 @@ rfidEtcRouter.get('/', async (req: express.Request, res: express.Response): Prom
     // Calculate skip value
     const skip = (page - 1) * limit;
 
-    // Get total count for pagination info
-    const totalRfidEtc = await RfidEtc.countDocuments();
+    // Get total count for pagination info (only active ones)
+    const totalRfidEtc = await RfidEtc.countDocuments({ is_active: true });
     const totalPages = Math.ceil(totalRfidEtc / limit);
 
     // Get RFID/ETC with pagination
@@ -104,17 +104,19 @@ rfidEtcRouter.get('/unassigned', async (req: express.Request, res: express.Respo
       .map(v => v.rfid_etc)
       .filter((rfid): rfid is string => rfid !== null && rfid !== undefined && rfid !== '');
 
-    // Get all RFID/ETC that are NOT in the assigned list
+    // Get all RFID/ETC that are NOT in the assigned list (only active ones)
     const unassignedRfidEtc = await RfidEtc.find({
-      rfid_etc: { $nin: assignedRfidEtc }
+      rfid_etc: { $nin: assignedRfidEtc },
+      is_active: true
     })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    // Get total count for pagination info
+    // Get total count for pagination info (only active ones)
     const totalUnassigned = await RfidEtc.countDocuments({
-      rfid_etc: { $nin: assignedRfidEtc }
+      rfid_etc: { $nin: assignedRfidEtc },
+      is_active: true
     });
     const totalPages = Math.ceil(totalUnassigned / limit);
 
@@ -150,9 +152,10 @@ rfidEtcRouter.get('/:rfid_etc', async (req: express.Request, res: express.Respon
       return;
     }
 
-    // Find RFID/ETC by code
+    // Find RFID/ETC by code (only active ones)
     const rfidEtc = await RfidEtc.findOne({ 
-      rfid_etc: rfid_etc.trim() 
+      rfid_etc: rfid_etc.trim(),
+      is_active: true
     });
 
     if (!rfidEtc) {
@@ -383,6 +386,94 @@ rfidEtcRouter.put('/:rfid_etc', async (req: express.Request, res: express.Respon
     }
 
     internalError(res, 'Không thể cập nhật RFID/ETC');
+  }
+});
+
+// DELETE /rfid-etc/:rfid_etc - Soft delete RFID/ETC by rfid_etc code (set is_active = false)
+rfidEtcRouter.delete('/:rfid_etc', async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const { rfid_etc } = req.params;
+
+    // Validate rfid_etc parameter
+    if (!rfid_etc || rfid_etc.trim() === '') {
+      res.status(400).json({
+        success: false,
+        error: 'Mã RFID/ETC là bắt buộc'
+      });
+      return;
+    }
+
+    // Find the RFID/ETC first (including inactive ones for soft delete)
+    const existingRfidEtc = await RfidEtc.findOne({ 
+      rfid_etc: rfid_etc.trim() 
+    });
+
+    if (!existingRfidEtc) {
+      res.status(404).json({
+        success: false,
+        error: 'Không tìm thấy RFID/ETC'
+      });
+      return;
+    }
+
+    // Check if RFID/ETC is already inactive
+    if (!existingRfidEtc.is_active) {
+      res.status(400).json({
+        success: false,
+        error: 'RFID/ETC đã bị xóa trước đó'
+      });
+      return;
+    }
+
+    // Check if RFID/ETC is assigned to any active vehicle
+    const vehicleWithRfid = await Vehicle.findOne({ 
+      rfid_etc: rfid_etc.trim(),
+      is_active: true
+    });
+
+    if (vehicleWithRfid) {
+      res.status(409).json({
+        success: false,
+        error: 'Không thể xóa RFID/ETC vì đang được gán cho phương tiện. Vui lòng gỡ khỏi phương tiện trước'
+      });
+      return;
+    }
+
+    // Soft delete: set is_active = false
+    const updatedRfidEtc = await RfidEtc.findByIdAndUpdate(
+      existingRfidEtc._id,
+      { is_active: false },
+      { new: true, runValidators: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Xóa RFID/ETC thành công',
+      data: {
+        _id: updatedRfidEtc?._id,
+        rfid_etc: updatedRfidEtc?.rfid_etc,
+        expiration_date: updatedRfidEtc?.expiration_date,
+        balance: updatedRfidEtc?.balance,
+        is_active: updatedRfidEtc?.is_active,
+        createdAt: updatedRfidEtc?.createdAt,
+        updatedAt: updatedRfidEtc?.updatedAt
+      }
+    });
+  } catch (error: any) {
+    console.error('Error deleting RFID/ETC:', error);
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map((err: any) => err.message);
+      res.status(400).json({
+        success: false,
+        error: 'Lỗi xác thực dữ liệu',
+        details: errors
+      });
+      return;
+    }
+
+    internalError(res, 'Không thể xóa RFID/ETC');
   }
 });
 
