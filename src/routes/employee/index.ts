@@ -8,6 +8,7 @@ import gateStaffRouter from './gateStaff';
 import roleRouter from './role';
 import busCompanyRouter from './busCompany';
 import routeRouter from './route';
+import statisticRouter from './statistic';
 
 interface IEmployeeRequest extends express.Request {
   body: {
@@ -197,6 +198,7 @@ employeeRouter.use('/gate-staff', gateStaffRouter);
 employeeRouter.use('/role', adminAuth, roleRouter);
 employeeRouter.use('/bus-company', adminAuth, busCompanyRouter);
 employeeRouter.use('/route', adminAuth, routeRouter);
+employeeRouter.use('/statistic', statisticRouter);
 
 //GET /employee/:id - Get employee by ID
 employeeRouter.get('/:id', adminAuth, async (req: express.Request, res: express.Response): Promise<void> => {
