@@ -6,9 +6,11 @@ import { internalError } from '../../utils';
 const busCompanyRouter = express.Router();
 
 // GET /employee/bus-company - list all bus companies
-busCompanyRouter.get('/', async (_req, res) => {
+busCompanyRouter.get('/', async (req, res) => {
     try {
-        const companies = await BusCompany.find().sort({ name: 1 });
+        const includeInactive = req.query.include_inactive === 'true';
+        const query = includeInactive ? {} : { is_active: true };
+        const companies = await BusCompany.find(query).sort({ name: 1 });
         res.json({
             success: true,
             data: companies
@@ -169,7 +171,7 @@ busCompanyRouter.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE /employee/bus-company/:id - delete bus company
+// DELETE /employee/bus-company/:id - soft delete bus company (set is_active = false)
 busCompanyRouter.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -182,9 +184,13 @@ busCompanyRouter.delete('/:id', async (req, res) => {
             return;
         }
 
-        const deleted = await BusCompany.findByIdAndDelete(id);
+        const updated = await BusCompany.findByIdAndUpdate(
+            id,
+            { $set: { is_active: false } },
+            { new: true }
+        );
 
-        if (!deleted) {
+        if (!updated) {
             res.status(404).json({
                 success: false,
                 error: 'Không tìm thấy nhà xe'
@@ -194,11 +200,11 @@ busCompanyRouter.delete('/:id', async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Xóa nhà xe thành công'
+            message: 'Vô hiệu hóa nhà xe thành công'
         });
     } catch (error) {
         console.error('Error deleting bus company:', error);
-        internalError(res, 'Không thể xóa nhà xe');
+        internalError(res, 'Không thể vô hiệu hóa nhà xe');
     }
 });
 
