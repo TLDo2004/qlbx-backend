@@ -162,6 +162,56 @@ vehicleRouter.get('/', async (req: express.Request, res: express.Response): Prom
   }
 });
 
+// GET /vehicle/by-rfid/:rfid_etc - Get vehicle by rfid_etc
+vehicleRouter.get('/by-rfid/:rfid_etc', async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const { rfid_etc } = req.params;
+
+    // Validate rfid_etc parameter
+    if (!rfid_etc || rfid_etc.trim() === '') {
+      res.status(400).json({
+        success: false,
+        error: 'Mã RFID/ETC là bắt buộc'
+      });
+      return;
+    }
+
+    // Find vehicle by rfid_etc (only active vehicles)
+    const vehicle = await Vehicle.findOne({ 
+      rfid_etc: rfid_etc.trim(),
+      is_active: true
+    });
+
+    if (!vehicle) {
+      res.status(404).json({
+        success: false,
+        error: 'Không tìm thấy phương tiện với RFID/ETC này'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        _id: vehicle._id,
+        license_plate: vehicle.license_plate,
+        seat: vehicle.seat,
+        vehicle_type: vehicle.vehicle_type,
+        companyId: vehicle.companyId ? vehicle.companyId.toString() : null,
+        routeId: vehicle.routeId ? vehicle.routeId.toString() : null,
+        rfid_etc: vehicle.rfid_etc,
+        gate: vehicle.gate,
+        is_active: vehicle.is_active,
+        createdAt: vehicle.createdAt,
+        updatedAt: vehicle.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching vehicle by rfid_etc:', error);
+    internalError(res, 'Không thể lấy thông tin phương tiện');
+  }
+});
+
 // GET /vehicle/:license_plate - Get vehicle by license plate
 vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
