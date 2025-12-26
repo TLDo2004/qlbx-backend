@@ -50,7 +50,9 @@ vehicleRouter.get('/', async (req: express.Request, res: express.Response): Prom
     }
 
     // Build filter conditions
-    const filters: any = {};
+    const filters: any = {
+      is_active: true // Only show active vehicles by default
+    };
 
     if (vehicleTypeFilter && vehicleTypeFilter !== 'all') {
       if (!Object.values(VehicleType).includes(vehicleTypeFilter as VehicleType)) {
@@ -136,6 +138,7 @@ vehicleRouter.get('/', async (req: express.Request, res: express.Response): Prom
         company: companyDoc ? companyDoc.name : null,
         rfid_etc: vehicle.rfid_etc,
         gate: vehicle.gate,
+        is_active: vehicle.is_active,
         createdAt: vehicle.createdAt,
         updatedAt: vehicle.updatedAt
       };
@@ -173,9 +176,10 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
       return;
     }
 
-    // Find vehicle by license plate (case-insensitive)
+    // Find vehicle by license plate (case-insensitive) - only active vehicles
     const vehicle = await Vehicle.findOne({ 
-      license_plate: license_plate.trim().toUpperCase() 
+      license_plate: license_plate.trim().toUpperCase(),
+      is_active: true
     });
 
     if (!vehicle) {
@@ -197,6 +201,7 @@ vehicleRouter.get('/:license_plate', async (req: express.Request, res: express.R
         routeId: vehicle.routeId,
         rfid_etc: vehicle.rfid_etc,
         gate: vehicle.gate,
+        is_active: vehicle.is_active,
         createdAt: vehicle.createdAt,
         updatedAt: vehicle.updatedAt
       }
@@ -239,9 +244,10 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
       return;
     }
 
-    // Check if vehicle with same license_plate already exists
+    // Check if vehicle with same license_plate already exists (including inactive ones)
     const existingVehicle = await Vehicle.findOne({ 
-      license_plate: license_plate.trim().toUpperCase() 
+      license_plate: license_plate.trim().toUpperCase(),
+      is_active: true
     });
     
     if (existingVehicle) {
@@ -268,9 +274,10 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
         return;
       }
       
-      // Then check if it's already assigned to another vehicle
+      // Then check if it's already assigned to another active vehicle
       const existingRfidVehicle = await Vehicle.findOne({ 
-        rfid_etc: rfid_etc.trim() 
+        rfid_etc: rfid_etc.trim(),
+        is_active: true
       });
       
       if (existingRfidVehicle) {
@@ -285,7 +292,8 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
     // Create vehicle data object with only provided fields
     const vehicleData: any = {
       license_plate: license_plate.trim().toUpperCase(),
-      gate
+      gate,
+      is_active: true
     };
 
     // Add optional fields if provided
@@ -328,6 +336,7 @@ vehicleRouter.post('/', async (req: IVehicleRequest, res: express.Response): Pro
         routeId: vehicle.routeId ? vehicle.routeId.toString() : null,
         rfid_etc: vehicle.rfid_etc,
         gate: vehicle.gate,
+        is_active: vehicle.is_active,
         createdAt: vehicle.createdAt,
         updatedAt: vehicle.updatedAt
       }
@@ -375,9 +384,9 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
       return;
     }
 
-    // Find the vehicle first
+    // Find the vehicle first (including inactive ones for update)
     const existingVehicle = await Vehicle.findOne({ 
-      license_plate: license_plate.trim().toUpperCase() 
+      license_plate: license_plate.trim().toUpperCase()
     });
 
     if (!existingVehicle) {
@@ -407,11 +416,12 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     }
 
     // Check if rfid_etc is being updated and if it exists in rfid_etc collection
-    if (rfid_etc && rfid_etc !== existingVehicle.rfid_etc) {
+    if (rfid_etc !== undefined && rfid_etc !== null && rfid_etc !== '' && rfid_etc !== existingVehicle.rfid_etc) {
       // First check if rfid_etc exists in rfid_etc collection
       const { RfidEtc } = await import('../../models');
+      const trimmedRfidEtc = rfid_etc.trim();
       const existingRfidEtc = await RfidEtc.findOne({ 
-        rfid_etc: rfid_etc.trim()
+        rfid_etc: trimmedRfidEtc
       });
       
       if (!existingRfidEtc) {
@@ -422,10 +432,11 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
         return;
       }
       
-      // Then check if it's already assigned to another vehicle
+      // Then check if it's already assigned to another active vehicle
       const existingRfidVehicle = await Vehicle.findOne({ 
-        rfid_etc: rfid_etc.trim(),
-        _id: { $ne: existingVehicle._id } // Exclude current vehicle
+        rfid_etc: trimmedRfidEtc,
+        _id: { $ne: existingVehicle._id }, // Exclude current vehicle
+        is_active: true
       });
       
       if (existingRfidVehicle) {
@@ -467,7 +478,13 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
         updateData.routeId = new mongoose.Types.ObjectId(routeId);
       }
     }
-    if (rfid_etc !== undefined) updateData.rfid_etc = rfid_etc.trim();
+    if (rfid_etc !== undefined) {
+      if (rfid_etc === null || rfid_etc === '') {
+        updateData.rfid_etc = null;
+      } else {
+        updateData.rfid_etc = rfid_etc.trim();
+      }
+    }
     if (gate !== undefined) updateData.gate = gate;
 
     // Update the vehicle
@@ -489,6 +506,7 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
         routeId: updatedVehicle?.routeId ? updatedVehicle.routeId.toString() : null,
         rfid_etc: updatedVehicle?.rfid_etc,
         gate: updatedVehicle?.gate,
+        is_active: updatedVehicle?.is_active,
         createdAt: updatedVehicle?.createdAt,
         updatedAt: updatedVehicle?.updatedAt
       }
@@ -518,6 +536,84 @@ vehicleRouter.put('/:license_plate', async (req: express.Request, res: express.R
     }
 
     internalError(res, 'Không thể cập nhật phương tiện');
+  }
+});
+
+// DELETE /vehicle/:license_plate - Soft delete vehicle (set is_active = false)
+vehicleRouter.delete('/:license_plate', async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const { license_plate } = req.params;
+
+    // Validate license_plate parameter
+    if (!license_plate || license_plate.trim() === '') {
+      res.status(400).json({
+        success: false,
+        error: 'Biển số xe là bắt buộc'
+      });
+      return;
+    }
+
+    // Find the vehicle first
+    const existingVehicle = await Vehicle.findOne({ 
+      license_plate: license_plate.trim().toUpperCase() 
+    });
+
+    if (!existingVehicle) {
+      res.status(404).json({
+        success: false,
+        error: 'Không tìm thấy phương tiện'
+      });
+      return;
+    }
+
+    // Check if vehicle is already inactive
+    if (!existingVehicle.is_active) {
+      res.status(400).json({
+        success: false,
+        error: 'Phương tiện đã bị xóa trước đó'
+      });
+      return;
+    }
+
+    // Soft delete: set is_active = false
+    const updatedVehicle = await Vehicle.findByIdAndUpdate(
+      existingVehicle._id,
+      { is_active: false },
+      { new: true, runValidators: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Xóa phương tiện thành công',
+      data: {
+        _id: updatedVehicle?._id,
+        license_plate: updatedVehicle?.license_plate,
+        seat: updatedVehicle?.seat,
+        vehicle_type: updatedVehicle?.vehicle_type,
+        companyId: updatedVehicle?.companyId ? updatedVehicle.companyId.toString() : null,
+        routeId: updatedVehicle?.routeId ? updatedVehicle.routeId.toString() : null,
+        rfid_etc: updatedVehicle?.rfid_etc,
+        gate: updatedVehicle?.gate,
+        is_active: updatedVehicle?.is_active,
+        createdAt: updatedVehicle?.createdAt,
+        updatedAt: updatedVehicle?.updatedAt
+      }
+    });
+  } catch (error: any) {
+    console.error('Error deleting vehicle:', error);
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map((err: any) => err.message);
+      res.status(400).json({
+        success: false,
+        error: 'Lỗi xác thực dữ liệu',
+        details: errors
+      });
+      return;
+    }
+
+    internalError(res, 'Không thể xóa phương tiện');
   }
 });
 
