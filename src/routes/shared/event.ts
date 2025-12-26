@@ -5,13 +5,12 @@
 
 import express from 'express';
 import { Event, EventType, EventStatus, GateId, Direction, ParkingSession, FeeRecord, FeeRecordStatus } from '../../models';
-import { gateStaffAuth } from '../../middleware';
 import { internalError, badRequest, success, notFound } from '../../utils';
 
 const eventRouter = express.Router();
 
 // GET /event - Get all events with pagination and filters
-eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
+eventRouter.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     // Parse query parameters
     const page = parseInt(req.query.page as string) || 1;
@@ -153,7 +152,7 @@ eventRouter.get('/', gateStaffAuth, async (req: express.Request, res: express.Re
 });
 
 // GET /event/:id - Get event by ID
-eventRouter.get('/:id', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
+eventRouter.get('/:id', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { id } = req.params;
 
@@ -214,7 +213,7 @@ eventRouter.get('/:id', gateStaffAuth, async (req: express.Request, res: express
 });
 
 // PUT /event/:id/status - Update event status
-eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
+eventRouter.put('/:id/status', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { status, failureReason, imageUrl, cameraEvent } = req.body as any;
@@ -318,7 +317,7 @@ eventRouter.put('/:id/status', gateStaffAuth, async (req: express.Request, res: 
 });
 
 // GET /event/stats/summary - Get event statistics
-eventRouter.get('/stats/summary', gateStaffAuth, async (req: express.Request, res: express.Response): Promise<void> => {
+eventRouter.get('/stats/summary', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
