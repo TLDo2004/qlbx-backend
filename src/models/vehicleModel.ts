@@ -25,6 +25,7 @@ export interface IVehicle extends Document {
     routeId?: mongoose.Schema.Types.ObjectId;
     rfid_etc?: string;
     gate: VehicleGateStatus;
+    is_active: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -70,6 +71,11 @@ const VehicleSchema = new Schema<IVehicle>({
         required: true,
         enum: Object.values(VehicleGateStatus),
         default: VehicleGateStatus.GATE_OUT
+    },
+    is_active: {
+        type: Boolean,
+        required: true,
+        default: true
     }
 }, {
     timestamps: true,

@@ -1,5 +1,5 @@
 import express from 'express';
-import { RfidEtc } from '../../models';
+import { RfidEtc, Vehicle } from '../../models';
 import { internalError } from '../../utils';
 
 interface IRfidEtcRequest extends express.Request {
@@ -65,6 +65,74 @@ rfidEtcRouter.get('/', async (req: express.Request, res: express.Response): Prom
   } catch (error) {
     console.error('Error fetching RFID/ETC:', error);
     internalError(res, 'Không thể lấy danh sách RFID/ETC');
+  }
+});
+
+// GET /rfid-etc/unassigned - Get all unassigned RFID/ETC (not assigned to any vehicle)
+rfidEtcRouter.get('/unassigned', async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    // Parse pagination parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // Validate pagination parameters
+    if (page < 1) {
+      res.status(400).json({
+        success: false,
+        error: 'Số trang phải lớn hơn 0'
+      });
+      return;
+    }
+
+    if (limit < 1 || limit > 100) {
+      res.status(400).json({
+        success: false,
+        error: 'Giới hạn phải từ 1 đến 100'
+      });
+      return;
+    }
+
+    // Calculate skip value
+    const skip = (page - 1) * limit;
+
+    // Get all rfid_etc codes that are assigned to vehicles
+    const vehiclesWithRfid = await Vehicle.find({ 
+      rfid_etc: { $exists: true, $ne: null, $nin: ['', null] } 
+    }).select('rfid_etc');
+    
+    const assignedRfidEtc = vehiclesWithRfid
+      .map(v => v.rfid_etc)
+      .filter((rfid): rfid is string => rfid !== null && rfid !== undefined && rfid !== '');
+
+    // Get all RFID/ETC that are NOT in the assigned list
+    const unassignedRfidEtc = await RfidEtc.find({
+      rfid_etc: { $nin: assignedRfidEtc }
+    })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Get total count for pagination info
+    const totalUnassigned = await RfidEtc.countDocuments({
+      rfid_etc: { $nin: assignedRfidEtc }
+    });
+    const totalPages = Math.ceil(totalUnassigned / limit);
+
+    res.json({
+      success: true,
+      data: unassignedRfidEtc,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalItems: totalUnassigned,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching unassigned RFID/ETC:', error);
+    internalError(res, 'Không thể lấy danh sách RFID/ETC chưa được gán');
   }
 });
 
